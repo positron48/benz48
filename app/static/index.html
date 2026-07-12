@@ -990,7 +990,7 @@
       <article class="panel share-chart-panel">
         <div class="chart-panel-header card-head">
           <h2 class="panel-title">Доля АЗС с топливом</h2>
-          <p class="card-desc" id="summaryChartDesc">По всей области · топливо среди работающих АЗС</p>
+          <p class="card-desc" id="summaryChartDesc">По всей области · доля от всех АЗС</p>
         </div>
         <div id="summaryChart" class="chart"></div>
       </article>
@@ -1476,14 +1476,14 @@
       const desc = document.getElementById("summaryChartDesc");
       const regions = selectedValues("regions");
       if (!regions.length) {
-        desc.textContent = "По всей области · топливо среди работающих АЗС";
+        desc.textContent = "По всей области · доля от всех АЗС";
         return;
       }
       const labels = regions.map((id) => {
         const group = (meta.region_groups || []).find((g) => g.id === id);
         return group ? group.label : id;
       });
-      desc.textContent = `Регион: ${labels.join(", ")} · топливо среди работающих АЗС`;
+      desc.textContent = `Регион: ${labels.join(", ")} · доля от всех АЗС`;
     }
 
     async function reloadSummary() {
@@ -2188,11 +2188,6 @@
       return Math.round((row[field] / row.total) * 100);
     }
 
-    function summaryFuelPct(row, field) {
-      if (!row.working_yes) return null;
-      return Math.round((row[field] / row.working_yes) * 100);
-    }
-
     function renderSummaryChart(summary) {
       summaryChart.getDom().style.height = "300px";
 
@@ -2271,10 +2266,7 @@
           lineStyle: { width: 2, color },
           itemStyle: { color, borderColor: "#0c1422", borderWidth: 1 },
           emphasis: { focus: "series" },
-          data: summary.map((row) => [
-            row.collected_at,
-            field === "working_yes" ? summaryPct(row, field) : summaryFuelPct(row, field),
-          ]),
+          data: summary.map((row) => [row.collected_at, summaryPct(row, field)]),
         })),
       }, true);
       summaryChart.resize();
