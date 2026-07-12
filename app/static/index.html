@@ -654,6 +654,7 @@
     }
     .pill-yes { color: var(--green); }
     .pill-no { color: var(--red); }
+    .pill-warn { color: #f7ad32; }
     .pill-off { color: var(--text-muted); }
     .chart { width: 100%; height: 360px; min-width: 0; overflow: visible; }
     .chart-compact { width: 100%; min-height: 200px; height: auto; overflow: visible; }
@@ -998,7 +999,7 @@
       <article class="panel availability-panel" id="fuelChartsSection">
         <div class="card-head">
           <h2 class="panel-title">Наличие топлива по АЗС</h2>
-          <p class="card-desc" id="fuelChartsDesc">Каждая АЗС — отдельная полоса на временной шкале</p>
+          <p class="card-desc" id="fuelChartsDesc" hidden></p>
         </div>
         <div class="availability-layout">
           <aside class="station-list">
@@ -1051,7 +1052,12 @@
       <section class="panel queue-panel">
         <div class="card-head">
           <h2 class="panel-title">Очереди по АЗС</h2>
-          <p class="card-desc">Метки: · нет · 30 · 60 · 60+</p>
+          <div class="state-legend">
+            <span class="pill pill-yes">&lt; 30</span>
+            <span class="pill pill-warn">30–60</span>
+            <span class="pill pill-no">60+</span>
+            <span class="pill pill-off">нет данных</span>
+          </div>
         </div>
         <div class="availability-layout">
           <aside class="station-list">
@@ -1106,8 +1112,12 @@
       "60_plus": "60+",
     };
     const QUEUE_ORDER = ["none", "up_to_30", "30_60", "60_plus"];
-    const QUEUE_LANE_OFFSET = { 0: -0.33, 1: -0.11, 2: 0.11, 3: 0.33 };
-    const QUEUE_POINT_LABEL = { 0: "·", 1: "30", 2: "60", 3: "60+" };
+    const FUEL_STATUS_COLORS = {
+      1: "#40d38a",
+      0: "#ff625f",
+      2: "#68778e",
+    };
+    const QUEUE_NO_DATA = -1;
     const CHART_COLORS = [
       "#4788ff", "#9d5af5", "#40c86f", "#ff514d", "#39bedc",
       "#f7ad32", "#24c7c8", "#a759f5", "#62e09a", "#68778e",
@@ -1828,36 +1838,40 @@
       return text.length > 20 ? `${text.slice(0, 18)}…` : text;
     }
 
-    function laneCenter(laneIndex) {
-      return laneIndex + 0.5;
-    }
+    function makeSwimlaneBarRenderItem(colorForStatus, mutedStatuses = []) {
+      return function swimlaneBarRenderItem(params, api) {
+        const start = api.value(0);
+        const end = api.value(1);
+        const lane = api.value(2);
+        const status = api.value(3);
+        const y = lane + 0.5;
+        const startPoint = api.coord([start, y]);
+        const endPoint = api.coord([end, y]);
+        const laneHeight = api.size([0, 1])[1];
+        const barHeight = Math.max(12, Math.min(20, laneHeight * 0.68));
+        const width = Math.max(endPoint[0] - startPoint[0], 1);
 
-    function laneY(laneIndex, fuelValue) {
-      const center = laneCenter(laneIndex);
-      if (fuelValue === 1) return center + 0.18;
-      if (fuelValue === 0) return center - 0.18;
-      return center;
-    }
-
-    function statusFromLaneY(y) {
-      const center = Math.round(y - 0.5) + 0.5;
-      const delta = y - center;
-      if (Math.abs(delta) <= 0.08) return 2;
-      if (delta > 0.08) return 1;
-      if (delta < -0.08) return 0;
-      return 2;
-    }
-
-    function fuelChangeLabel(status) {
-      if (status === 1) return "✓";
-      if (status === 0) return "✗";
-      return "⊘";
-    }
-
-    function fuelChangeColor(status) {
-      if (status === 1) return "#40d38a";
-      if (status === 0) return "#ff625f";
-      return "#68778e";
+        return {
+          type: "rect",
+          shape: {
+            x: startPoint[0],
+            y: startPoint[1] - barHeight / 2,
+            width,
+            height: barHeight,
+          },
+          style: {
+            fill: colorForStatus(status),
+            opacity: mutedStatuses.includes(status) ? 0.82 : 0.96,
+          },
+          emphasis: {
+            style: {
+              opacity: 1,
+              shadowBlur: 6,
+              shadowColor: "rgba(0, 0, 0, 0.35)",
+            },
+          },
+        };
+      };
     }
 
     function buildSwimlaneYAxis(laneLabels) {
@@ -1883,14 +1897,8 @@
       return { left: 12, right: 12, top: 32, bottom: 36, containLabel: false };
     }
 
-    function laneLabelPosition(y, laneIndex = null) {
-      if (laneIndex === 0) return "bottom";
-      const center = Math.round(y - 0.5) + 0.5;
-      return y >= center ? "bottom" : "top";
-    }
-
     function fuelChartHeight(stationCount) {
-      return Math.min(600, Math.max(200, stationCount * 28 + 52));
+      return Math.min(600, Math.max(200, stationCount * 32 + 52));
     }
 
     function chartTimeBounds(timeseries) {
@@ -1920,11 +1928,127 @@
       return `${total} снимков в базе`;
     }
 
-    function buildFuelSeriesForStation(timeseries, stationId, fuelKey) {
-      return timeseries
+    function fuelStatusColor(status) {
+      return FUEL_STATUS_COLORS[status] ?? CHART_THEME.offline;
+    }
+
+    function queueChartStatus(queueValue) {
+      if (!queueValue) return QUEUE_NO_DATA;
+      const idx = QUEUE_ORDER.indexOf(queueValue);
+      return idx >= 0 ? idx : QUEUE_NO_DATA;
+    }
+
+    function queueStatusColor(status) {
+      if (status === QUEUE_NO_DATA) return CHART_THEME.offline;
+      if (status === 0 || status === 1) return "#40d38a";
+      if (status === 2) return "#f7ad32";
+      if (status === 3) return "#ff625f";
+      return CHART_THEME.offline;
+    }
+
+    function queueStatusLabel(status) {
+      if (status === QUEUE_NO_DATA) return "Нет данных";
+      return queueLabel(QUEUE_ORDER[status]);
+    }
+
+    const fuelBarRenderItem = makeSwimlaneBarRenderItem(fuelStatusColor, [2]);
+    const queueBarRenderItem = makeSwimlaneBarRenderItem(queueStatusColor, [QUEUE_NO_DATA]);
+
+    function buildTimelineSegments(rows, statusForRow, rangeEndMs) {
+      if (!rows.length) return [];
+      const points = rows.map((row) => [
+        new Date(row.collected_at).getTime(),
+        statusForRow(row),
+      ]);
+
+      const changes = [];
+      for (let i = 0; i < points.length; i++) {
+        const [time, status] = points[i];
+        if (i === 0 || status !== points[i - 1][1]) {
+          changes.push([time, status]);
+        }
+      }
+
+      const segments = [];
+      for (let i = 0; i < changes.length; i++) {
+        const [start, status] = changes[i];
+        const end = i + 1 < changes.length ? changes[i + 1][0] : rangeEndMs;
+        if (end > start) segments.push({ start, end, status });
+      }
+      return segments;
+    }
+
+    function buildFuelSegmentsForStation(timeseries, stationId, fuelKey, rangeEndMs) {
+      const rows = timeseries
         .filter((row) => row.station_id === stationId)
-        .map((row) => [row.collected_at, fuelChartStatus(row, fuelKey)])
-        .filter(([, val]) => val !== null);
+        .sort((a, b) => a.collected_at.localeCompare(b.collected_at));
+      let lastKnownFuelStatus = null;
+
+      function statusForRow(row) {
+        const status = fuelChartStatus(row, fuelKey);
+        if (status === 2) {
+          return status;
+        }
+        if (status !== null) {
+          lastKnownFuelStatus = status;
+          return status;
+        }
+        if (row.is_working !== "no" && lastKnownFuelStatus !== null) {
+          return lastKnownFuelStatus;
+        }
+        return null;
+      }
+
+      return buildTimelineSegments(rows, statusForRow, rangeEndMs).filter(
+        (segment) => segment.status !== null,
+      );
+    }
+
+    function buildQueueSegmentsForStation(timeseries, stationId, rangeEndMs) {
+      const rows = timeseries
+        .filter((row) => row.station_id === stationId)
+        .sort((a, b) => a.collected_at.localeCompare(b.collected_at));
+      return buildTimelineSegments(rows, (row) => queueChartStatus(row.queue), rangeEndMs);
+    }
+
+    function buildFuelBarSeriesData(visibleStations, timeseries, fuelKey, timeBounds) {
+      const rangeEndMs = timeBounds.max;
+      const data = [];
+      visibleStations.forEach((station, laneIndex) => {
+        const segments = buildFuelSegmentsForStation(
+          timeseries,
+          station.station_id,
+          fuelKey,
+          rangeEndMs,
+        );
+        for (const segment of segments) {
+          data.push({
+            value: [segment.start, segment.end, laneIndex, segment.status],
+            station,
+            fuelKey,
+          });
+        }
+      });
+      return data;
+    }
+
+    function buildQueueBarSeriesData(visibleStations, timeseries, timeBounds) {
+      const rangeEndMs = timeBounds.max;
+      const data = [];
+      visibleStations.forEach((station, laneIndex) => {
+        const segments = buildQueueSegmentsForStation(
+          timeseries,
+          station.station_id,
+          rangeEndMs,
+        );
+        for (const segment of segments) {
+          data.push({
+            value: [segment.start, segment.end, laneIndex, segment.status],
+            station,
+          });
+        }
+      });
+      return data;
     }
 
     function buildTimeXAxis(timeBounds) {
@@ -1966,83 +2090,42 @@
         return;
       }
 
-      const series = visibleStations.map((station, laneIndex) => {
-        const rawPoints = buildFuelSeriesForStation(timeseries, station.station_id, fuelKey)
-          .filter(([, val]) => val !== null);
-
-        const color = CHART_COLORS[laneIndex % CHART_COLORS.length];
-        const sparse = rawPoints.length <= 2;
-        const data = rawPoints.map(([ts, status], idx) => {
-          const isChange = idx > 0 && status !== rawPoints[idx - 1][1];
-          const showMark = isChange || sparse;
-          const isOffline = status === 2;
-          const y = laneY(laneIndex, status);
-          return {
-            value: [ts, y],
-            symbol: showMark ? "circle" : "none",
-            symbolSize: showMark ? 5 : 0,
-            label: {
-              show: showMark,
-              formatter: fuelChangeLabel(status),
-              fontSize: 10,
-              fontWeight: 700,
-              color: fuelChangeColor(status),
-              position: laneLabelPosition(y, laneIndex),
-              distance: 4,
-              overflow: "none",
-            },
-            lineStyle: isOffline
-              ? { type: "dashed", color: CHART_THEME.offline, opacity: 0.6, width: 1.5 }
-              : undefined,
-            itemStyle: isOffline
-              ? { color: CHART_THEME.offline, borderColor: "var(--surface-1)", borderWidth: 1 }
-              : { color, borderColor: "var(--surface-1)", borderWidth: 1 },
-          };
-        });
-
-        return {
-          name: `${station.brand} — ${station.address}`,
-          type: "line",
-          step: "end",
-          connectNulls: false,
-          showSymbol: true,
-          color,
-          lineStyle: { width: 1.5, color, opacity: 0.9 },
-          itemStyle: { color, borderColor: "var(--surface-1)", borderWidth: 1 },
-          emphasis: { focus: "series" },
-          clip: false,
-          labelLayout: { hideOverlap: true },
-          data,
-        };
-      });
-
       const timeBounds = chartTimeBounds(timeseries);
+      const barData = buildFuelBarSeriesData(visibleStations, timeseries, fuelKey, timeBounds);
+
       chart.setOption({
         title: { show: false },
         backgroundColor: "transparent",
-        labelLayout: { hideOverlap: true },
         tooltip: {
-          trigger: "axis",
-          axisPointer: { type: "line", lineStyle: { color: CHART_THEME.splitH } },
+          trigger: "item",
           ...chartTooltipStyle(),
           formatter(params) {
-            if (!params.length) return "";
-            const time = formatDateTime(params[0].value[0]);
-            const lines = [`<strong>${FUEL_LABELS[fuelKey]}</strong> · ${time}`];
-            for (const item of params) {
-              const station = visibleStations[item.seriesIndex];
-              const status = statusFromLaneY(item.value[1]);
-              const atIso = item.value[0];
-              lines.push(`${item.marker} ${item.seriesName}: <strong>${fuelStatusLabel(status, station?.station_id, atIso)}</strong>`);
-            }
-            return lines.join("<br>");
+            const segment = params.data;
+            if (!segment?.station) return "";
+            const [start] = segment.value;
+            const status = segment.value[3];
+            const atIso = new Date(start).toISOString();
+            const stationLabel = `${segment.station.brand} — ${segment.station.address}`;
+            return [
+              `<strong>${FUEL_LABELS[fuelKey]}</strong>`,
+              stationLabel,
+              `<strong>${fuelStatusLabel(status, segment.station.station_id, atIso)}</strong>`,
+              formatDateTime(atIso),
+            ].join("<br>");
           },
         },
         legend: { show: false },
         grid: swimlaneGrid(),
         xAxis: buildTimeXAxis(timeBounds),
         yAxis: buildSwimlaneYAxis(laneLabels),
-        series,
+        series: [{
+          name: FUEL_LABELS[fuelKey],
+          type: "custom",
+          renderItem: fuelBarRenderItem,
+          clip: true,
+          encode: { x: [0, 1], y: 2 },
+          data: barData,
+        }],
       }, true);
       chart.resize();
     }
@@ -2054,9 +2137,13 @@
       });
       const desc = document.getElementById("fuelChartsDesc");
       const selected = selectedValues("currentlyHas");
-      desc.textContent = selected.length
-        ? `Показано: ${selected.map((k) => FUEL_LABELS[k]).join(", ")}`
-        : "Каждая АЗС — отдельная полоса на временной шкале";
+      if (selected.length) {
+        desc.textContent = `Показано: ${selected.map((k) => FUEL_LABELS[k]).join(", ")}`;
+        desc.hidden = false;
+      } else {
+        desc.textContent = "";
+        desc.hidden = true;
+      }
     }
 
     function renderFuelCharts(timeseries) {
@@ -2066,28 +2153,6 @@
       for (const key of visibleFuelChartKeys()) {
         renderSingleFuelChart(fuelCharts[key], timeseries, key, stations);
       }
-    }
-
-    function queueLaneY(laneIndex, queueNum) {
-      const center = laneCenter(laneIndex);
-      if (queueNum === null || queueNum < 0) return center;
-      return center + (QUEUE_LANE_OFFSET[queueNum] ?? 0);
-    }
-
-    function queueFromLaneY(y) {
-      const center = Math.round(y - 0.5) + 0.5;
-      const delta = y - center;
-      if (delta < -0.25) return 0;
-      if (delta < -0.05) return 1;
-      if (delta < 0.15) return 2;
-      return 3;
-    }
-
-    function buildQueueSeriesForStation(timeseries, stationId) {
-      return timeseries
-        .filter((row) => row.station_id === stationId)
-        .map((row) => [row.collected_at, queueNumeric(row.queue)])
-        .filter(([, val]) => val !== null);
     }
 
     function renderQueueChart(timeseries) {
@@ -2116,69 +2181,40 @@
         return;
       }
 
-      const series = visibleStations.map((station, laneIndex) => {
-        const rawPoints = buildQueueSeriesForStation(timeseries, station.station_id);
-        const points = rawPoints.map(([ts, val], idx) => {
-          const y = queueLaneY(laneIndex, val);
-          const prevVal = idx > 0 ? rawPoints[idx - 1][1] : null;
-          const showLabel = idx === 0 || val !== prevVal;
-          return {
-            value: [ts, y],
-            label: {
-              show: showLabel,
-              formatter: QUEUE_POINT_LABEL[val] ?? "",
-              fontSize: 10,
-              fontWeight: 700,
-              color: CHART_THEME.text,
-              position: laneLabelPosition(y, laneIndex),
-              distance: 4,
-              overflow: "none",
-            },
-          };
-        });
-
-        const color = CHART_COLORS[laneIndex % CHART_COLORS.length];
-        return {
-          name: `${station.brand} — ${station.address}`,
-          type: "line",
-          step: "end",
-          connectNulls: false,
-          showSymbol: true,
-          symbol: "circle",
-          symbolSize: 4,
-          color,
-          lineStyle: { width: 1.5, color, opacity: 0.9 },
-          itemStyle: { color, borderColor: "var(--surface-1)", borderWidth: 1 },
-          emphasis: { focus: "series" },
-          clip: false,
-          labelLayout: { hideOverlap: true },
-          data: points,
-        };
-      });
-
       const timeBounds = chartTimeBounds(timeseries);
+      const barData = buildQueueBarSeriesData(visibleStations, timeseries, timeBounds);
+
       queueChart.setOption({
         backgroundColor: "transparent",
         tooltip: {
-          trigger: "axis",
-          axisPointer: { type: "line", lineStyle: { color: CHART_THEME.splitH } },
+          trigger: "item",
           ...chartTooltipStyle(),
           formatter(params) {
-            if (!params.length) return "";
-            const time = formatDateTime(params[0].value[0]);
-            const lines = [`<strong>Очередь</strong> · ${time}`];
-            for (const item of params) {
-              const level = queueFromLaneY(item.value[1]);
-              lines.push(`${item.marker} ${item.seriesName}: <strong>${queueLabel(QUEUE_ORDER[level])}</strong>`);
-            }
-            return lines.join("<br>");
+            const segment = params.data;
+            if (!segment?.station) return "";
+            const [start] = segment.value;
+            const status = segment.value[3];
+            const stationLabel = `${segment.station.brand} — ${segment.station.address}`;
+            return [
+              "<strong>Очередь</strong>",
+              stationLabel,
+              `<strong>${queueStatusLabel(status)}</strong>`,
+              formatDateTime(new Date(start).toISOString()),
+            ].join("<br>");
           },
         },
         legend: { show: false },
         grid: swimlaneGrid(),
         xAxis: buildTimeXAxis(timeBounds),
         yAxis: buildSwimlaneYAxis(laneLabels),
-        series,
+        series: [{
+          name: "Очередь",
+          type: "custom",
+          renderItem: queueBarRenderItem,
+          clip: true,
+          encode: { x: [0, 1], y: 2 },
+          data: barData,
+        }],
       }, true);
       queueChart.resize();
     }
