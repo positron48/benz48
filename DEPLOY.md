@@ -1,8 +1,10 @@
 # Деплой в k3s (GitOps)
 
+Репозиторий: **https://github.com/positron48/benz48**
+
 GitOps-манифесты: [`devops-time-host/apps/lipetsk-gas-monitor`](../../www/my/k3s/devops-time-host/apps/lipetsk-gas-monitor).
 
-Публичный URL после выката: **https://gas.qantrix.ru**
+Публичный URL: **https://gas.qantrix.ru**
 
 ## Стратегия данных
 
