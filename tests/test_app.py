@@ -164,6 +164,41 @@ def test_get_latest_enriches_fuel_during_outage(tmp_path) -> None:
     assert target["queue"] == "60_plus"
 
 
+def test_summary_excludes_offline_from_fuel_share(tmp_path) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    stations = parse_reports_html(html)
+    storage = Storage(tmp_path)
+
+    working_at = datetime(2026, 7, 12, 8, 0, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    storage.save_snapshot(stations, "https://example.test", working_at)
+
+    baseline = storage.query_summary()[0]
+    assert baseline["total"] == 24
+    assert baseline["working_yes"] >= 1
+    baseline_fuel_95 = baseline["fuel_95_yes"]
+
+    outage_at = datetime(2026, 7, 12, 12, 59, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    outage_stations = []
+    for station in stations:
+        data = station.to_dict()
+        if data["brand"] == "ЛУКОЙЛ" and "Катукова, 49" in data["address"]:
+            assert data["is_working"] == "yes"
+            assert data["fuel_95"] == "yes"
+            data["is_working"] = "no"
+            data["fuel_92"] = None
+            data["fuel_95"] = None
+            data["fuel_diesel"] = None
+            data["queue"] = None
+        outage_stations.append(StationRecord(**data))
+
+    storage.save_snapshot(outage_stations, "https://example.test", outage_at)
+    latest = storage.query_summary()[-1]
+
+    assert latest["total"] == 24
+    assert latest["working_yes"] == baseline["working_yes"] - 1
+    assert latest["fuel_95_yes"] == baseline_fuel_95 - 1
+
+
 def test_fuel_yes_since_uses_latest_spell_after_no() -> None:
     rows = [
         {"station_id": "a", "collected_at": "2026-07-11T17:09:20+03:00", "fuel_95": "yes"},

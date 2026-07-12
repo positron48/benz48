@@ -562,9 +562,9 @@ class Storage:
         query = f"""
             SELECT collected_at,
                    COUNT(*) AS total,
-                   SUM(CASE WHEN fuel_92 = 'yes' THEN 1 ELSE 0 END) AS fuel_92_yes,
-                   SUM(CASE WHEN fuel_95 = 'yes' THEN 1 ELSE 0 END) AS fuel_95_yes,
-                   SUM(CASE WHEN fuel_diesel = 'yes' THEN 1 ELSE 0 END) AS fuel_diesel_yes,
+                   SUM(CASE WHEN is_working = 'yes' AND fuel_92 = 'yes' THEN 1 ELSE 0 END) AS fuel_92_yes,
+                   SUM(CASE WHEN is_working = 'yes' AND fuel_95 = 'yes' THEN 1 ELSE 0 END) AS fuel_95_yes,
+                   SUM(CASE WHEN is_working = 'yes' AND fuel_diesel = 'yes' THEN 1 ELSE 0 END) AS fuel_diesel_yes,
                    SUM(CASE WHEN is_working = 'yes' THEN 1 ELSE 0 END) AS working_yes
             FROM observations
             WHERE {' AND '.join(clauses)}
