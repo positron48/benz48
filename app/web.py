@@ -71,7 +71,10 @@ def fuel_since(
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(static_dir / "index.html")
+    return FileResponse(
+        static_dir / "index.html",
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 app.mount("/static", StaticFiles(directory=static_dir), name="static")

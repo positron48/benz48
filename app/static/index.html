@@ -169,6 +169,77 @@
       border-radius: 6px;
       margin-bottom: 2px;
     }
+    .filter-picker {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+    .filter-picker-search {
+      min-height: 34px;
+      padding: 6px 10px;
+      font-size: 13px;
+      border-color: var(--line-strong);
+      background: #fff;
+    }
+    .filter-picker-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 10px;
+    }
+    .filter-picker-toolbar button {
+      width: auto;
+      min-height: 0;
+      padding: 0;
+      font-size: 11px;
+      font-weight: 600;
+      background: none;
+      border: none;
+      color: var(--accent-dark);
+      cursor: pointer;
+    }
+    .filter-picker-toolbar button:hover {
+      background: none;
+      text-decoration: underline;
+    }
+    .filter-picker-list {
+      height: 200px;
+      min-height: 200px;
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 4px;
+    }
+    .filter-picker-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .filter-picker-item:hover { background: #f1f5f9; }
+    .filter-picker-item input {
+      width: auto;
+      min-height: 0;
+      margin-top: 2px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .filter-picker-label {
+      min-width: 0;
+      word-break: break-word;
+    }
+    .filter-picker-empty {
+      padding: 16px 10px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
     button {
       background: var(--accent);
       color: #fff;
@@ -202,9 +273,9 @@
     }
     .filters-grid {
       display: grid;
-      grid-template-columns: minmax(220px, 1.05fr) repeat(4, minmax(150px, 1fr));
+      grid-template-columns: minmax(200px, 0.95fr) repeat(4, minmax(160px, 1fr));
       gap: 14px;
-      align-items: start;
+      align-items: stretch;
     }
     .filter-group {
       background: #f8fafc;
@@ -212,6 +283,11 @@
       border-radius: var(--radius-sm);
       padding: 12px;
       min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .filter-group:has(.filter-picker) .filter-picker {
+      flex: 1;
     }
     .group-label {
       display: block;
@@ -222,16 +298,14 @@
       color: var(--muted);
       margin-bottom: 10px;
     }
-    .date-row {
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
+    .date-fields {
+      display: flex;
+      flex-direction: column;
       gap: 8px;
-      align-items: end;
     }
-    .date-sep {
-      color: var(--muted);
-      font-weight: 700;
-      padding-bottom: 10px;
+    .date-field label {
+      display: block;
+      margin-bottom: 4px;
     }
     .preset-row {
       display: flex;
@@ -565,43 +639,66 @@
       <div class="filters-grid">
         <div class="filter-group">
           <span class="group-label">Период</span>
-          <div class="date-row">
-            <div>
+          <div class="date-fields">
+            <div class="date-field">
               <label for="from">С</label>
               <input type="datetime-local" id="from">
             </div>
-            <span class="date-sep">—</span>
-            <div>
+            <div class="date-field">
               <label for="to">По</label>
               <input type="datetime-local" id="to">
             </div>
           </div>
           <div class="preset-row">
-            <button type="button" class="chip-btn active" data-preset="12">±12 ч</button>
-            <button type="button" class="chip-btn" data-preset="24">±24 ч</button>
+            <button type="button" class="chip-btn" data-preset="12">±12 ч</button>
+            <button type="button" class="chip-btn active" data-preset="24">±24 ч</button>
             <button type="button" class="chip-btn" data-preset="72">3 дня</button>
           </div>
         </div>
         <div class="filter-group">
           <span class="group-label">Регион</span>
-          <select id="regions" multiple aria-label="Регион"></select>
+          <div class="filter-picker" id="regions">
+            <input type="search" class="filter-picker-search" placeholder="Поиск региона..." aria-label="Поиск по регионам">
+            <div class="filter-picker-toolbar">
+              <button type="button" data-action="select-visible">Отметить видимые</button>
+              <button type="button" data-action="clear-visible">Снять видимые</button>
+            </div>
+            <div class="filter-picker-list" role="group" aria-label="Регион"></div>
+          </div>
           <div class="filter-hint">Кластеры по муниципалитетам, без одиночных МО</div>
         </div>
         <div class="filter-group">
           <span class="group-label">Бренды</span>
-          <select id="brands" multiple aria-label="Бренды"></select>
+          <div class="filter-picker" id="brands">
+            <input type="search" class="filter-picker-search" placeholder="Поиск бренда..." aria-label="Поиск по брендам">
+            <div class="filter-picker-toolbar">
+              <button type="button" data-action="select-visible">Отметить видимые</button>
+              <button type="button" data-action="clear-visible">Снять видимые</button>
+            </div>
+            <div class="filter-picker-list" role="group" aria-label="Бренды"></div>
+          </div>
         </div>
         <div class="filter-group">
           <span class="group-label">АЗС</span>
-          <select id="stations" multiple aria-label="АЗС"></select>
+          <div class="filter-picker" id="stations">
+            <input type="search" class="filter-picker-search" placeholder="Поиск АЗС..." aria-label="Поиск по АЗС">
+            <div class="filter-picker-toolbar">
+              <button type="button" data-action="select-visible">Отметить видимые</button>
+              <button type="button" data-action="clear-visible">Снять видимые</button>
+            </div>
+            <div class="filter-picker-list" role="group" aria-label="АЗС"></div>
+          </div>
         </div>
         <div class="filter-group">
           <span class="group-label">Сейчас есть</span>
-          <select id="currentlyHas" multiple aria-label="Сейчас есть">
-            <option value="fuel_92">АИ-92</option>
-            <option value="fuel_95">АИ-95</option>
-            <option value="fuel_diesel">Дизель</option>
-          </select>
+          <div class="filter-picker" id="currentlyHas">
+            <input type="search" class="filter-picker-search" placeholder="Поиск топлива..." aria-label="Поиск по видам топлива">
+            <div class="filter-picker-toolbar">
+              <button type="button" data-action="select-visible">Отметить видимые</button>
+              <button type="button" data-action="clear-visible">Снять видимые</button>
+            </div>
+            <div class="filter-picker-list" role="group" aria-label="Сейчас есть"></div>
+          </div>
           <div class="filter-hint">Только АЗС, где выбранное топливо есть сейчас</div>
         </div>
       </div>
@@ -747,8 +844,8 @@
     }
 
     function setDefaultDateRange() {
-      setDateRangeFromPreset(12);
-      updatePresetButtons(12);
+      setDateRangeFromPreset(24);
+      updatePresetButtons(24);
     }
 
     function setDateRangeFromPreset(hours) {
@@ -770,19 +867,100 @@
       return new Date(value).toISOString();
     }
 
+    function filterPickerRoot(id) {
+      return document.getElementById(id);
+    }
+
+    function filterPickerList(id) {
+      return filterPickerRoot(id).querySelector(".filter-picker-list");
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function applyFilterPickerSearch(id) {
+      const root = filterPickerRoot(id);
+      const query = root.querySelector(".filter-picker-search").value.trim().toLowerCase();
+      const list = filterPickerList(id);
+      let visibleCount = 0;
+      list.querySelectorAll(".filter-picker-item").forEach((item) => {
+        const haystack = item.dataset.search || item.textContent.toLowerCase();
+        const visible = !query || haystack.includes(query);
+        item.hidden = !visible;
+        if (visible) visibleCount += 1;
+      });
+      let empty = list.querySelector(".filter-picker-empty-search");
+      if (visibleCount === 0 && query) {
+        if (!empty) {
+          empty = document.createElement("div");
+          empty.className = "filter-picker-empty filter-picker-empty-search";
+          empty.textContent = "Ничего не найдено";
+          list.appendChild(empty);
+        }
+        empty.hidden = false;
+      } else if (empty) {
+        empty.remove();
+      }
+      const baseEmpty = list.querySelector(".filter-picker-empty:not(.filter-picker-empty-search)");
+      if (baseEmpty) baseEmpty.hidden = visibleCount > 0 || !!query;
+    }
+
+    function clearFilterPicker(id) {
+      const root = filterPickerRoot(id);
+      root.querySelectorAll(".filter-picker-list input[type=checkbox]").forEach((input) => {
+        input.checked = false;
+      });
+      root.querySelector(".filter-picker-search").value = "";
+      applyFilterPickerSearch(id);
+    }
+
+    function bindFilterPicker(id, onChange) {
+      const root = filterPickerRoot(id);
+      root.querySelector(".filter-picker-search").addEventListener("input", () => {
+        applyFilterPickerSearch(id);
+      });
+      root.querySelector(".filter-picker-list").addEventListener("change", (event) => {
+        if (event.target.matches('input[type="checkbox"]')) onChange();
+      });
+      root.querySelector('[data-action="select-visible"]').addEventListener("click", () => {
+        root.querySelectorAll(".filter-picker-item:not([hidden]) input[type=checkbox]").forEach((input) => {
+          input.checked = true;
+        });
+        onChange();
+      });
+      root.querySelector('[data-action="clear-visible"]').addEventListener("click", () => {
+        root.querySelectorAll(".filter-picker-item:not([hidden]) input[type=checkbox]").forEach((input) => {
+          input.checked = false;
+        });
+        onChange();
+      });
+    }
+
     function selectedValues(id) {
-      return [...document.getElementById(id).selectedOptions].map((o) => o.value);
+      return [...filterPickerList(id).querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
     }
 
     function setOptions(id, items, valueKey, labelKey) {
-      const select = document.getElementById(id);
-      select.innerHTML = "";
-      for (const item of items) {
-        const option = document.createElement("option");
-        option.value = item[valueKey];
-        option.textContent = item[labelKey];
-        select.appendChild(option);
+      const list = filterPickerList(id);
+      if (!items.length) {
+        list.innerHTML = '<div class="filter-picker-empty">Нет пунктов</div>';
+        return;
       }
+      list.innerHTML = items.map((item) => {
+        const value = item[valueKey];
+        const label = item[labelKey];
+        return `
+          <label class="filter-picker-item" data-search="${escapeHtml(String(label).toLowerCase())}">
+            <input type="checkbox" value="${escapeHtml(value)}">
+            <span class="filter-picker-label">${escapeHtml(label)}</span>
+          </label>`;
+      }).join("");
+      applyFilterPickerSearch(id);
     }
 
     function badge(value) {
@@ -825,8 +1003,8 @@
 
     function setMultiSelectValues(id, values, validSet) {
       const wanted = new Set(values);
-      [...document.getElementById(id).options].forEach((option) => {
-        option.selected = wanted.has(option.value) && (!validSet || validSet.has(option.value));
+      filterPickerList(id).querySelectorAll('input[type="checkbox"]').forEach((input) => {
+        input.checked = wanted.has(input.value) && (!validSet || validSet.has(input.value));
       });
     }
 
@@ -1611,6 +1789,20 @@
         "value",
         "label",
       );
+      setOptions(
+        "currentlyHas",
+        [
+          { value: "fuel_92", label: "АИ-92" },
+          { value: "fuel_95", label: "АИ-95" },
+          { value: "fuel_diesel", label: "Дизель" },
+        ],
+        "value",
+        "label",
+      );
+
+      for (const id of ["regions", "brands", "stations", "currentlyHas"]) {
+        bindFilterPicker(id, onFiltersChanged);
+      }
 
       applyFiltersFromUrl();
       setDefaultDateRange();
@@ -1623,16 +1815,11 @@
         clearTimeout(searchSyncTimer);
         searchSyncTimer = setTimeout(onFiltersChanged, 200);
       });
-      document.getElementById("currentlyHas").addEventListener("change", onFiltersChanged);
-      document.getElementById("brands").addEventListener("change", onFiltersChanged);
-      document.getElementById("regions").addEventListener("change", onFiltersChanged);
-      document.getElementById("stations").addEventListener("change", onFiltersChanged);
       document.getElementById("reset").addEventListener("click", () => {
         document.getElementById("search").value = "";
-        [...document.getElementById("currentlyHas").options].forEach((o) => (o.selected = false));
-        [...document.getElementById("brands").options].forEach((o) => (o.selected = false));
-        [...document.getElementById("regions").options].forEach((o) => (o.selected = false));
-        [...document.getElementById("stations").options].forEach((o) => (o.selected = false));
+        for (const id of ["currentlyHas", "brands", "regions", "stations"]) {
+          clearFilterPicker(id);
+        }
         setDefaultDateRange();
         syncFiltersToUrl();
         loadData();

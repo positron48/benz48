@@ -9,6 +9,7 @@ services:
       BOOTSTRAP_ENABLED: "false"
     volumes:
       - ./data:/app/data
+      - ./app:/app/app:ro
     restart: unless-stopped
     depends_on:
       web:
@@ -26,6 +27,7 @@ services:
       - "${PORT:-18743}:8000"
     volumes:
       - ./data:/app/data
+      - ./app:/app/app:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
