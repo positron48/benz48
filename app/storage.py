@@ -91,6 +91,43 @@ def dedupe_consecutive_summary(rows: list[dict[str, Any]]) -> list[dict[str, Any
     return result
 
 
+FUEL_KEYS = ("fuel_92", "fuel_95", "fuel_diesel")
+OUTAGE_CARRY_KEYS = (*FUEL_KEYS, "queue")
+
+
+def apply_carry_forward(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not rows:
+        return rows
+
+    carry_by_station: dict[str, dict[str, str | None]] = {}
+    enriched_by_index: dict[int, dict[str, Any]] = {}
+    for idx, row in sorted(enumerate(rows), key=lambda item: item[1]["collected_at"]):
+        carry = carry_by_station.setdefault(row["station_id"], {})
+        enriched = dict(row)
+        for key in OUTAGE_CARRY_KEYS:
+            value = row.get(key)
+            if value is not None:
+                carry[key] = value
+                enriched[key] = value
+            elif row.get("is_working") == "no" and carry.get(key) is not None:
+                enriched[key] = carry[key]
+            else:
+                enriched[key] = value
+        enriched_by_index[idx] = enriched
+    return [enriched_by_index[index] for index in range(len(rows))]
+
+
+def carry_forward_station_fuels(
+    station: dict[str, Any],
+    previous: dict[str, str | None] | None,
+) -> None:
+    if station.get("is_working") != "no" or not previous:
+        return
+    for key in OUTAGE_CARRY_KEYS:
+        if station.get(key) is None and previous.get(key) is not None:
+            station[key] = previous[key]
+
+
 def fuel_yes_since(rows: list[dict[str, Any]], fuel_key: str) -> str | None:
     """Start of the most recent yes spell after a no within the selected period."""
     if not rows:
@@ -147,11 +184,14 @@ class Storage:
         collected_at: datetime | None = None,
     ) -> Path:
         collected_at = collected_at or datetime.now(MOSCOW)
+        stations_data = [station.to_dict() for station in stations]
+        with self._connect() as conn:
+            self._carry_forward_fuels_on_save(conn, stations_data)
         payload = {
             "collected_at": collected_at.isoformat(),
             "source_url": source_url,
-            "station_count": len(stations),
-            "stations": [station.to_dict() for station in stations],
+            "station_count": len(stations_data),
+            "stations": stations_data,
         }
 
         path = self.snapshot_path(collected_at)
@@ -169,12 +209,12 @@ class Storage:
             tmp_path.replace(path)
         index_status = self._index_snapshot(path, payload)
         if index_status == "full":
-            logger.info("Saved snapshot %s (%s stations)", path, len(stations))
+            logger.info("Saved snapshot %s (%s stations)", path, len(stations_data))
         elif index_status == "snapshot_only":
             logger.info(
                 "Saved unchanged snapshot %s (%s stations, observations reused)",
                 path,
-                len(stations),
+                len(stations_data),
             )
         elif index_status == "duplicate":
             logger.info("Snapshot already indexed: %s", payload["collected_at"])
@@ -196,6 +236,51 @@ class Storage:
             """
         ).fetchall()
         return {row["station_id"]: observation_signature(dict(row)) for row in rows}
+
+    def _carry_forward_state_at(
+        self,
+        conn: sqlite3.Connection,
+        station_id: str,
+        at_or_before: str | None = None,
+    ) -> dict[str, str | None] | None:
+        clauses = ["station_id = ?"]
+        params: list[Any] = [station_id]
+        if at_or_before is not None:
+            clauses.append("collected_at <= ?")
+            params.append(at_or_before)
+
+        rows = conn.execute(
+            f"""
+            SELECT station_id, collected_at, is_working, fuel_92, fuel_95, fuel_diesel, queue
+            FROM observations
+            WHERE {' AND '.join(clauses)}
+            ORDER BY collected_at ASC
+            """,
+            params,
+        ).fetchall()
+        if not rows:
+            return None
+        return apply_carry_forward([dict(row) for row in rows])[-1]
+
+    def _carry_forward_fuels_on_save(
+        self, conn: sqlite3.Connection, stations: list[dict[str, Any]]
+    ) -> None:
+        for station in stations:
+            previous = self._carry_forward_state_at(conn, station["id"])
+            carry_forward_station_fuels(station, previous)
+
+    def _enrich_latest_stations(
+        self, conn: sqlite3.Connection, stations: list[dict[str, Any]], collected_at: str
+    ) -> None:
+        for station in stations:
+            enriched = self._carry_forward_state_at(
+                conn, station["station_id"], collected_at
+            )
+            if not enriched:
+                continue
+            for key in OUTAGE_CARRY_KEYS:
+                if station.get(key) is None and enriched.get(key) is not None:
+                    station[key] = enriched[key]
 
     def _index_snapshot(self, path: Path, payload: dict[str, Any]) -> str:
         collected_at = payload["collected_at"]
@@ -391,6 +476,9 @@ class Storage:
                     {**dict(o), "collected_at": row["collected_at"]} for o in fallback
                 ]
 
+        with self._connect() as conn:
+            self._enrich_latest_stations(conn, stations, row["collected_at"])
+
         return {
             "collected_at": row["collected_at"],
             "filepath": row["filepath"],
@@ -434,7 +522,8 @@ class Storage:
 
         with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
-        return dedupe_consecutive_observations([dict(row) for row in rows])
+        enriched = apply_carry_forward([dict(row) for row in rows])
+        return dedupe_consecutive_observations(enriched)
 
     def query_summary(
         self,
@@ -537,13 +626,21 @@ class Storage:
             }
 
         latest_by_station = self._latest_by_station(station_ids, brands)
+        latest_snapshot = self.get_latest()
+        if latest_snapshot:
+            latest_by_station = {
+                station["station_id"]: station for station in latest_snapshot["stations"]
+            }
+
         result: list[dict[str, Any]] = []
         for station_id in sorted(
             station_meta,
             key=lambda sid: (station_meta[sid]["brand"], station_meta[sid]["name"]),
         ):
             meta = station_meta[station_id]
-            station_rows = dedupe_consecutive_observations(grouped[station_id])
+            station_rows = dedupe_consecutive_observations(
+                apply_carry_forward(grouped[station_id])
+            )
             latest = latest_by_station.get(station_id, {})
             result.append(
                 {

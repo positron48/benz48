@@ -533,7 +533,7 @@
     }
     .availability-layout {
       display: grid;
-      grid-template-columns: 300px minmax(0, 1fr);
+      grid-template-columns: 260px minmax(0, 1fr);
       min-height: 330px;
     }
     .station-list {
@@ -604,6 +604,7 @@
     }
     .timeline-area {
       min-width: 0;
+      width: 100%;
       display: flex;
       flex-direction: column;
       overflow: visible;
@@ -655,7 +656,7 @@
     .pill-no { color: var(--red); }
     .pill-off { color: var(--text-muted); }
     .chart { width: 100%; height: 360px; min-width: 0; overflow: visible; }
-    .chart-compact { min-height: 200px; height: auto; overflow: visible; }
+    .chart-compact { width: 100%; min-height: 200px; height: auto; overflow: visible; }
     .share-chart-panel {
       display: flex;
       flex-direction: column;
@@ -718,6 +719,20 @@
       color: #e8eef7;
       font-weight: 650;
       font-size: 11px;
+    }
+    .station-badge {
+      display: inline-block;
+      margin-bottom: 4px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 650;
+      line-height: 1.2;
+      letter-spacing: 0.01em;
+    }
+    .station-badge--offline {
+      background: rgba(255, 98, 95, 0.14);
+      color: var(--red);
     }
     .station-cell__address {
       color: #77869a;
@@ -800,7 +815,19 @@
       .filters-toolbar { flex-wrap: wrap; }
       .filters-search-row { grid-template-columns: 1fr; }
       .filters-grid { grid-template-columns: 1fr 1fr; }
-      .availability-layout { grid-template-columns: 240px minmax(0, 1fr); }
+      .availability-layout { grid-template-columns: 220px minmax(0, 1fr); }
+      .data-table {
+        min-width: 0;
+        table-layout: auto;
+      }
+      .data-table th,
+      .data-table td {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+      .data-table th {
+        letter-spacing: 0.02em;
+      }
     }
     @media (max-width: 767px) {
       .dashboard { padding: 14px; }
@@ -811,6 +838,44 @@
       .page-header { flex-direction: column; }
       .filters-actions { justify-content: stretch; }
       .filters-actions .button-primary { flex: 1; }
+      .data-table th,
+      .data-table td {
+        padding-left: 5px;
+        padding-right: 5px;
+      }
+      .data-table th {
+        height: 30px;
+        font-size: 9px;
+      }
+      .data-table td {
+        height: 36px;
+        font-size: 10px;
+      }
+      .data-table th .sort-mark {
+        margin-left: 2px;
+      }
+      .status-positive,
+      .status-negative,
+      .status-unknown {
+        min-width: 28px;
+        padding: 0 5px;
+        font-size: 9px;
+      }
+      .station-badge {
+        font-size: 9px;
+        padding: 2px 4px;
+        white-space: normal;
+        max-width: 108px;
+      }
+      .station-cell__brand {
+        font-size: 10px;
+      }
+      .station-cell__address {
+        font-size: 9px;
+      }
+      .table-panel__header {
+        padding: 0 10px;
+      }
     }
   </style>
 </head>
@@ -1024,6 +1089,16 @@
       fuel_diesel: "Дизель",
     };
     const ALL_FUEL_KEYS = ["fuel_92", "fuel_95", "fuel_diesel"];
+    const FUEL_SINCE_COLUMNS = [
+      { key: "fuel_92", sinceLabel: "АИ-92 с", sinceField: "fuel_92_since", nowLabel: "Сейчас 92" },
+      { key: "fuel_95", sinceLabel: "АИ-95 с", sinceField: "fuel_95_since", nowLabel: "Сейчас 95" },
+      { key: "fuel_diesel", sinceLabel: "Дизель с", sinceField: "fuel_diesel_since", nowLabel: "Сейчас ДТ" },
+    ];
+    const LATEST_FUEL_COLUMNS = [
+      { key: "fuel_92", label: "92" },
+      { key: "fuel_95", label: "95" },
+      { key: "fuel_diesel", label: "Дизель" },
+    ];
     const QUEUE_LABELS = {
       none: "нет",
       up_to_30: "до 30",
@@ -1204,14 +1279,84 @@
       applyFilterPickerSearch(id);
     }
 
+    function pluralRu(n, one, few, many) {
+      const mod10 = n % 10;
+      const mod100 = n % 100;
+      if (mod10 === 1 && mod100 !== 11) return one;
+      if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+      return many;
+    }
+
+    function formatDurationShort(ms) {
+      if (!Number.isFinite(ms) || ms < 0) ms = 0;
+      const totalMinutes = Math.floor(ms / 60000);
+      if (totalMinutes < 60) {
+        const n = Math.max(1, totalMinutes);
+        return `${n} мин`;
+      }
+      const hours = Math.floor(totalMinutes / 60);
+      return `${hours} ч`;
+    }
+
+    function formatDurationHours(ms) {
+      if (!Number.isFinite(ms) || ms < 0) ms = 0;
+      const hours = Math.max(1, Math.floor(ms / 3600000));
+      return `${hours} ${pluralRu(hours, "час", "часа", "часов")}`;
+    }
+
+    const OFFLINE_BREAK_THRESHOLD_MS = 4 * 60 * 60 * 1000;
+
+    function stationTimeseriesRows(stationId) {
+      return (cache.timeseries || []).filter((row) => row.station_id === stationId);
+    }
+
+    function offlineSinceAt(rows, untilMs) {
+      const ordered = [...rows]
+        .filter((row) => new Date(row.collected_at).getTime() <= untilMs)
+        .sort((a, b) => a.collected_at.localeCompare(b.collected_at));
+      let since = null;
+      for (const row of ordered) {
+        if (row.is_working === "no") {
+          if (since === null) since = row.collected_at;
+        } else if (row.is_working === "yes") {
+          since = null;
+        }
+      }
+      return since;
+    }
+
+    function offlineDurationText(sinceIso, untilIso) {
+      if (!sinceIso || !untilIso) return "не работает";
+      const ms = new Date(untilIso).getTime() - new Date(sinceIso).getTime();
+      if (ms > OFFLINE_BREAK_THRESHOLD_MS) {
+        return `не работает ${formatDurationHours(ms)}`;
+      }
+      return `${formatDurationShort(ms)} на перерыве`;
+    }
+
+    function offlineLabelForStation(stationId, untilIso) {
+      const until = untilIso || cache.latest?.collected_at;
+      if (!until) return "не работает";
+      const rows = stationTimeseriesRows(stationId);
+      if (!rows.length) return "не работает";
+      const since = offlineSinceAt(rows, new Date(until).getTime());
+      return offlineDurationText(since, until);
+    }
+
     function badge(value) {
       if (value === "yes") return '<span class="status-positive">Да</span>';
       if (value === "no") return '<span class="status-negative">Нет</span>';
       return '<span class="status-unknown">—</span>';
     }
 
-    function stationCell(brand, address) {
-      return `<div class="station-cell__brand">${brand}</div><div class="station-cell__address">${address}</div>`;
+    function stationOfflineBadge(isWorking, stationId) {
+      if (isWorking !== "no") return "";
+      const label = offlineLabelForStation(stationId);
+      return `<span class="station-badge station-badge--offline">${label}</span>`;
+    }
+
+    function stationCell(brand, address, isWorking, stationId) {
+      return `${stationOfflineBadge(isWorking, stationId)}<div class="station-cell__brand">${brand}</div><div class="station-cell__address">${address}</div>`;
     }
 
     function formatAxisDateTime(iso) {
@@ -1485,6 +1630,33 @@
       });
     }
 
+    function visibleFuelChartKeys() {
+      const selected = selectedValues("currentlyHas");
+      return selected.length ? selected : ALL_FUEL_KEYS;
+    }
+
+    function visibleFuelSinceColumns() {
+      const visible = new Set(visibleFuelChartKeys());
+      return FUEL_SINCE_COLUMNS.filter((column) => visible.has(column.key));
+    }
+
+    function visibleLatestFuelColumns() {
+      const visible = new Set(visibleFuelChartKeys());
+      return LATEST_FUEL_COLUMNS.filter((column) => visible.has(column.key));
+    }
+
+    function ensureFuelSinceSortValid() {
+      const valid = new Set(["station", "queue"]);
+      for (const column of visibleFuelSinceColumns()) {
+        valid.add(column.sinceField);
+        valid.add(column.key);
+      }
+      if (!valid.has(fuelSinceSort.column)) {
+        fuelSinceSort.column = "station";
+        fuelSinceSort.dir = "asc";
+      }
+    }
+
     function sortHeader(label, column) {
       const active = fuelSinceSort.column === column;
       const mark = active ? (fuelSinceSort.dir === "asc" ? "▲" : "▼") : "↕";
@@ -1498,16 +1670,16 @@
         return;
       }
 
+      ensureFuelSinceSortValid();
+      const fuelColumns = visibleFuelSinceColumns();
       const sorted = sortRows(rows, fuelSinceSort.column, fuelSinceSort.dir);
       const body = sorted.map((row) => `
         <tr>
-          <td>${stationCell(row.brand, row.address)}</td>
-          <td>${formatDateTime(row.fuel_92_since)}</td>
-          <td>${formatDateTime(row.fuel_95_since)}</td>
-          <td>${formatDateTime(row.fuel_diesel_since)}</td>
-          <td>${badge(row.fuel_92)}</td>
-          <td>${badge(row.fuel_95)}</td>
-          <td>${badge(row.fuel_diesel)}</td>
+          <td>${stationCell(row.brand, row.address, row.is_working, row.station_id)}</td>
+          ${fuelColumns.map((column) => `
+            <td>${formatDateTime(row[column.sinceField])}</td>
+            <td>${badge(row[column.key])}</td>
+          `).join("")}
           <td>${queueLabel(row.queue)}</td>
         </tr>
       `).join("");
@@ -1517,12 +1689,10 @@
           <thead>
             <tr>
               ${sortHeader("АЗС", "station")}
-              ${sortHeader("АИ-92 с", "fuel_92_since")}
-              ${sortHeader("АИ-95 с", "fuel_95_since")}
-              ${sortHeader("Дизель с", "fuel_diesel_since")}
-              ${sortHeader("Сейчас 92", "fuel_92")}
-              ${sortHeader("Сейчас 95", "fuel_95")}
-              ${sortHeader("Сейчас ДТ", "fuel_diesel")}
+              ${fuelColumns.map((column) => `
+                ${sortHeader(column.sinceLabel, column.sinceField)}
+                ${sortHeader(column.nowLabel, column.key)}
+              `).join("")}
               ${sortHeader("Очередь", "queue")}
             </tr>
           </thead>
@@ -1549,13 +1719,12 @@
         container.innerHTML = '<div class="empty">Данных пока нет. Подождите первый сбор.</div>';
         return;
       }
+      const fuelColumns = visibleLatestFuelColumns();
       const rows = latest.stations.map((s) => `
         <tr>
-          <td>${stationCell(s.brand, s.address)}</td>
+          <td>${stationCell(s.brand, s.address, s.is_working, s.station_id)}</td>
           <td>${badge(s.is_working)}</td>
-          <td>${badge(s.fuel_92)}</td>
-          <td>${badge(s.fuel_95)}</td>
-          <td>${badge(s.fuel_diesel)}</td>
+          ${fuelColumns.map((column) => `<td>${badge(s[column.key])}</td>`).join("")}
           <td>${queueLabel(s.queue)}</td>
           <td>${formatDateTime(s.last_report_at)}</td>
         </tr>
@@ -1564,7 +1733,11 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th>АЗС</th><th>Работает</th><th>92</th><th>95</th><th>Дизель</th><th>Очередь</th><th>Последний отчёт</th>
+              <th>АЗС</th>
+              <th>Работает</th>
+              ${fuelColumns.map((column) => `<th>${column.label}</th>`).join("")}
+              <th>Очередь</th>
+              <th>Последний отчёт</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -1580,7 +1753,10 @@
             brand: row.brand,
             address: row.address,
             name: row.name,
+            is_working: row.is_working,
           });
+        } else {
+          seen.get(row.station_id).is_working = row.is_working;
         }
       }
       return [...seen.values()].sort((a, b) =>
@@ -1603,6 +1779,7 @@
             <input type="checkbox" data-station-id="${station.station_id}" ${checked ? "checked" : ""}>
             <span class="legend-dot" style="background:${color}"></span>
             <span class="legend-label">
+              ${stationOfflineBadge(station.is_working, station.station_id)}
               <div class="station-row__brand">${station.brand}</div>
               <div class="station-row__address">${station.address}</div>
             </span>
@@ -1636,10 +1813,13 @@
       };
     }
 
-    function fuelStatusLabel(value) {
+    function fuelStatusLabel(value, stationId, atIso) {
       if (value === 1) return "Есть";
       if (value === 0) return "Нет";
-      if (value === 2) return "Не работает";
+      if (value === 2) {
+        if (stationId && atIso) return offlineLabelForStation(stationId, atIso);
+        return "не работает";
+      }
       return "—";
     }
 
@@ -1688,19 +1868,7 @@
         interval: 0.5,
         axisLine: { lineStyle: { color: CHART_THEME.axisLine } },
         axisLabel: {
-          color: CHART_THEME.text,
-          fontSize: 10,
-          formatter(v) {
-            if (Math.abs(v - Math.round(v)) < 0.01) return "";
-            const idx = Math.floor(v);
-            if (idx >= 0 && idx < laneLabels.length && Math.abs(v - idx - 0.5) < 0.01) {
-              return laneLabels[idx];
-            }
-            return "";
-          },
-          margin: 10,
-          align: "right",
-          verticalAlign: "middle",
+          show: false,
         },
         axisTick: { show: false },
         splitLine: {
@@ -1712,7 +1880,7 @@
     }
 
     function swimlaneGrid() {
-      return { left: 108, right: 16, top: 32, bottom: 36 };
+      return { left: 12, right: 12, top: 32, bottom: 36, containLabel: false };
     }
 
     function laneLabelPosition(y, laneIndex = null) {
@@ -1862,8 +2030,10 @@
             const time = formatDateTime(params[0].value[0]);
             const lines = [`<strong>${FUEL_LABELS[fuelKey]}</strong> · ${time}`];
             for (const item of params) {
+              const station = visibleStations[item.seriesIndex];
               const status = statusFromLaneY(item.value[1]);
-              lines.push(`${item.marker} ${item.seriesName}: <strong>${fuelStatusLabel(status)}</strong>`);
+              const atIso = item.value[0];
+              lines.push(`${item.marker} ${item.seriesName}: <strong>${fuelStatusLabel(status, station?.station_id, atIso)}</strong>`);
             }
             return lines.join("<br>");
           },
@@ -1875,11 +2045,6 @@
         series,
       }, true);
       chart.resize();
-    }
-
-    function visibleFuelChartKeys() {
-      const selected = selectedValues("currentlyHas");
-      return selected.length ? selected : ALL_FUEL_KEYS;
     }
 
     function updateFuelChartsVisibility() {
@@ -2010,7 +2175,7 @@
           },
         },
         legend: { show: false },
-        grid: { left: 108, right: 16, top: 36, bottom: 36 },
+        grid: swimlaneGrid(),
         xAxis: buildTimeXAxis(timeBounds),
         yAxis: buildSwimlaneYAxis(laneLabels),
         series,

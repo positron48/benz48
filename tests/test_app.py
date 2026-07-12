@@ -5,12 +5,19 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.parser import (
+    StationRecord,
     normalize_queue,
     normalize_yes_no,
     parse_report_datetime,
     parse_reports_html,
 )
-from app.storage import Storage, dedupe_consecutive_observations, fuel_yes_since
+from app.storage import (
+    Storage,
+    apply_carry_forward,
+    carry_forward_station_fuels,
+    dedupe_consecutive_observations,
+    fuel_yes_since,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "reports_page.html"
 
@@ -55,6 +62,106 @@ def test_dedupe_consecutive_observations() -> None:
     assert len(deduped) == 2
     assert deduped[0]["collected_at"] == "t1"
     assert deduped[1]["collected_at"] == "t3"
+
+
+def test_apply_carry_forward_preserves_fuel_during_outage() -> None:
+    rows = [
+        {
+            "station_id": "a",
+            "collected_at": "2026-07-12T08:00:00+03:00",
+            "is_working": "yes",
+            "fuel_95": "yes",
+            "fuel_92": "yes",
+            "fuel_diesel": "no",
+        },
+        {
+            "station_id": "a",
+            "collected_at": "2026-07-12T12:59:00+03:00",
+            "is_working": "no",
+            "fuel_95": None,
+            "fuel_92": None,
+            "fuel_diesel": None,
+        },
+    ]
+    enriched = apply_carry_forward(rows)
+    assert enriched[1]["fuel_95"] == "yes"
+    assert enriched[1]["fuel_92"] == "yes"
+    assert enriched[1]["fuel_diesel"] == "no"
+
+
+def test_apply_carry_forward_preserves_queue_during_outage() -> None:
+    rows = [
+        {
+            "station_id": "a",
+            "collected_at": "2026-07-12T08:00:00+03:00",
+            "is_working": "yes",
+            "fuel_95": "yes",
+            "queue": "up_to_30",
+        },
+        {
+            "station_id": "a",
+            "collected_at": "2026-07-12T12:59:00+03:00",
+            "is_working": "no",
+            "fuel_95": None,
+            "queue": None,
+        },
+    ]
+    enriched = apply_carry_forward(rows)
+    assert enriched[1]["fuel_95"] == "yes"
+    assert enriched[1]["queue"] == "up_to_30"
+
+
+def test_carry_forward_station_fuels_on_save() -> None:
+    station = {
+        "id": "a",
+        "is_working": "no",
+        "fuel_95": None,
+        "fuel_92": "yes",
+        "fuel_diesel": None,
+    }
+    carry_forward_station_fuels(
+        station,
+        {"fuel_95": "yes", "fuel_92": "yes", "fuel_diesel": "no"},
+    )
+    assert station["fuel_95"] == "yes"
+    assert station["fuel_92"] == "yes"
+    assert station["fuel_diesel"] == "no"
+
+
+def test_get_latest_enriches_fuel_during_outage(tmp_path) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    stations = parse_reports_html(html)
+    storage = Storage(tmp_path)
+
+    working_at = datetime(2026, 7, 12, 8, 0, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    outage_at = datetime(2026, 7, 12, 12, 59, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+
+    storage.save_snapshot(stations, "https://example.test", working_at)
+
+    outage_stations = []
+    for station in stations:
+        data = station.to_dict()
+        if data["brand"] == "ЛУКОЙЛ" and "Катукова, 49" in data["address"]:
+            data["is_working"] = "no"
+            data["fuel_92"] = None
+            data["fuel_95"] = None
+            data["fuel_diesel"] = None
+            data["queue"] = None
+            data["reason"] = "Технический перерыв"
+        outage_stations.append(StationRecord(**data))
+
+    storage.save_snapshot(outage_stations, "https://example.test", outage_at)
+
+    latest = storage.get_latest()
+    assert latest is not None
+    target = next(
+        s
+        for s in latest["stations"]
+        if s["brand"] == "ЛУКОЙЛ" and "Катукова, 49" in s["address"]
+    )
+    assert target["is_working"] == "no"
+    assert target["fuel_92"] == "yes"
+    assert target["queue"] == "60_plus"
 
 
 def test_fuel_yes_since_uses_latest_spell_after_no() -> None:
