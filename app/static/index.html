@@ -1247,6 +1247,33 @@
       return Math.min(900, Math.max(280, stationCount * 36 + 56));
     }
 
+    function chartTimeBounds(timeseries) {
+      const timestamps = [...new Set(timeseries.map((row) => row.collected_at))].sort();
+      if (!timestamps.length) return null;
+      const minMs = new Date(timestamps[0]).getTime();
+      const maxMs = new Date(timestamps[timestamps.length - 1]).getTime();
+      const spanMs = Math.max(maxMs - minMs, 60 * 60 * 1000);
+      const padMs = Math.max(spanMs * 0.05, 30 * 60 * 1000);
+      return { min: minMs - padMs, max: maxMs + padMs };
+    }
+
+    function formatSubtitle() {
+      const total = meta.snapshot_count || 0;
+      if (!total) return "Ожидание первого сбора данных";
+      const from = document.getElementById("from").value;
+      const to = document.getElementById("to").value;
+      let text = `${total} снимков в базе`;
+      if (from || to) {
+        const parts = [];
+        if (from) parts.push(`с ${formatDateTime(from)}`);
+        if (to) parts.push(`по ${formatDateTime(to)}`);
+        text += ` · фильтр ${parts.join(" ")}`;
+      } else if (meta.from) {
+        text += ` · ${formatDateTime(meta.from)} — ${formatDateTime(meta.to)}`;
+      }
+      return text;
+    }
+
     function buildFuelSeriesForStation(timeseries, stationId, fuelKey) {
       return timeseries
         .filter((row) => row.station_id === stationId)
@@ -1281,15 +1308,17 @@
           .filter(([, val]) => val !== null);
 
         const color = CHART_COLORS[laneIndex % CHART_COLORS.length];
+        const sparse = rawPoints.length <= 2;
         const data = rawPoints.map(([ts, status], idx) => {
           const isChange = idx > 0 && status !== rawPoints[idx - 1][1];
+          const showMark = isChange || sparse;
           const isOffline = status === 2;
           return {
             value: [ts, laneY(laneIndex, status)],
-            symbol: isChange ? "circle" : "none",
-            symbolSize: isChange ? 8 : 0,
+            symbol: showMark ? "circle" : "none",
+            symbolSize: showMark ? 8 : 0,
             label: {
-              show: isChange,
+              show: showMark,
               formatter: fuelChangeLabel(status),
               fontSize: 12,
               fontWeight: 700,
@@ -1320,6 +1349,7 @@
         };
       });
 
+      const timeBounds = chartTimeBounds(timeseries);
       chart.setOption({
         title: { show: false },
         tooltip: {
@@ -1338,7 +1368,9 @@
         },
         legend: { show: false },
         grid: { left: 128, right: 20, top: 16, bottom: 48 },
-        xAxis: { type: "time" },
+        xAxis: timeBounds
+          ? { type: "time", min: timeBounds.min, max: timeBounds.max }
+          : { type: "time" },
         yAxis: buildSwimlaneYAxis(laneLabels),
         series,
       }, true);
@@ -1450,6 +1482,7 @@
         };
       });
 
+      const timeBounds = chartTimeBounds(timeseries);
       queueChart.setOption({
         tooltip: {
           trigger: "axis",
@@ -1467,7 +1500,9 @@
         },
         legend: { show: false },
         grid: { left: 128, right: 20, top: 16, bottom: 48 },
-        xAxis: { type: "time" },
+        xAxis: timeBounds
+          ? { type: "time", min: timeBounds.min, max: timeBounds.max }
+          : { type: "time" },
         yAxis: buildSwimlaneYAxis(laneLabels),
         series,
       }, true);
@@ -1550,9 +1585,7 @@
 
       cache = { latest, timeseries, summary, fuelSince };
 
-      document.getElementById("subtitle").textContent = meta.from
-        ? `Данные с ${formatDateTime(meta.from)} по ${formatDateTime(meta.to)}`
-        : "Ожидание первого сбора данных";
+      document.getElementById("subtitle").textContent = formatSubtitle();
 
       renderAll();
     }

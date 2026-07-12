@@ -155,3 +155,22 @@ def test_api_endpoints(tmp_path):
 
     index = client.get("/")
     assert index.status_code == 200
+
+
+def test_bootstrap_from_gzip(tmp_path, monkeypatch):
+    from app.bootstrap import bootstrap_database_if_needed
+
+    bootstrap_src = Path(__file__).resolve().parents[1] / "bootstrap" / "history.db.gz"
+    if not bootstrap_src.exists():
+        pytest.skip("bootstrap/history.db.gz not bundled")
+
+    monkeypatch.setenv("BOOTSTRAP_MIN_SNAPSHOTS", "10")
+    storage = Storage(tmp_path)
+    assert storage.get_meta()["snapshot_count"] == 0
+
+    installed = bootstrap_database_if_needed(storage)
+    assert installed is True
+    assert storage.get_meta()["snapshot_count"] >= 10
+
+    # Second run should be a no-op.
+    assert bootstrap_database_if_needed(storage) is False

@@ -9,9 +9,19 @@ from fastapi.staticfiles import StaticFiles
 
 from app.storage import Storage
 
-app = FastAPI(title="Lipetsk Gas Monitor")
 storage = Storage()
 static_dir = Path(__file__).parent / "static"
+
+app = FastAPI(title="Lipetsk Gas Monitor")
+
+
+@app.on_event("startup")
+def _bootstrap_on_startup() -> None:
+    from app.bootstrap import bootstrap_on_startup
+
+    bootstrap_on_startup()
+    global storage
+    storage = Storage()
 
 
 @app.get("/api/health")

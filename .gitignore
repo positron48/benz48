@@ -7,3 +7,6 @@ venv/
 data/
 !.gitkeep
 .DS_Store
+lipetsk-gas-migrate.tar.gz
+*.tar.gz
+!bootstrap/history.db.gz

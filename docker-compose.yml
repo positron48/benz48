@@ -6,9 +6,13 @@ services:
       - .env
     environment:
       DATA_DIR: /app/data
+      BOOTSTRAP_ENABLED: "false"
     volumes:
       - ./data:/app/data
     restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
 
   web:
     build: .
@@ -17,6 +21,7 @@ services:
       - .env
     environment:
       DATA_DIR: /app/data
+      BOOTSTRAP_ENABLED: "true"
     ports:
       - "${PORT:-18743}:8000"
     volumes:

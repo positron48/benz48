@@ -6,6 +6,7 @@ import time
 
 import httpx
 
+from app.bootstrap import bootstrap_on_startup
 from app.config import settings
 from app.parser import parse_reports_html
 from app.storage import Storage
@@ -69,6 +70,7 @@ def run_loop() -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--once":
+        bootstrap_on_startup()
         collect_once()
     else:
         run_loop()
