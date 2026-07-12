@@ -30,6 +30,7 @@ class Settings:
     collect_interval_seconds: int = _int("COLLECT_INTERVAL_SECONDS", 300)
     data_dir: Path = Path(os.getenv("DATA_DIR", "./data"))
     listen_port: int = _int("LISTEN_PORT", 8000)
+    api_cache_seconds: int = _int("API_CACHE_SECONDS", 120)
     timezone: str = os.getenv("TIMEZONE", "Europe/Moscow")
     request_timeout_seconds: float = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "30"))
     request_retries: int = _int("REQUEST_RETRIES", 3)

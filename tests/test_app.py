@@ -163,6 +163,34 @@ def test_api_endpoints(tmp_path):
     assert index.status_code == 200
 
 
+def test_api_cache(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setenv("API_CACHE_SECONDS", "120")
+
+    html = FIXTURE.read_text(encoding="utf-8")
+    stations = parse_reports_html(html)
+    storage = Storage(tmp_path)
+    storage.save_snapshot(stations, "https://example.test")
+
+    from app import web
+    from app.cache import TTLCache
+
+    web.storage = storage
+    web.api_cache = TTLCache(120)
+    client = TestClient(web.app)
+
+    first = client.get("/api/meta")
+    second = client.get("/api/meta")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.headers["X-Cache"] == "MISS"
+    assert second.headers["X-Cache"] == "HIT"
+    assert first.headers["Cache-Control"] == "public, max-age=120"
+    assert first.json() == second.json()
+
+
 def test_bootstrap_from_gzip(tmp_path, monkeypatch):
     from app.bootstrap import bootstrap_database_if_needed
 
