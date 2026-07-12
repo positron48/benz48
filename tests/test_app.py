@@ -68,12 +68,12 @@ def test_fuel_yes_since_uses_latest_spell_after_no() -> None:
     assert fuel_yes_since(rows, "fuel_95") == "2026-07-12T08:01:18+03:00"
 
 
-def test_fuel_yes_since_none_when_currently_unavailable() -> None:
+def test_fuel_yes_since_keeps_last_spell_when_fuel_lost() -> None:
     rows = [
         {"station_id": "a", "collected_at": "2026-07-11T17:09:20+03:00", "fuel_95": "yes"},
         {"station_id": "a", "collected_at": "2026-07-11T17:40:00+03:00", "fuel_95": "no"},
     ]
-    assert fuel_yes_since(rows, "fuel_95") is None
+    assert fuel_yes_since(rows, "fuel_95") == "2026-07-11T17:09:20+03:00"
 
 
 def test_skip_unchanged_snapshot_index(tmp_path):

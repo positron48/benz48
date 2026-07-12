@@ -92,21 +92,20 @@ def dedupe_consecutive_summary(rows: list[dict[str, Any]]) -> list[dict[str, Any
 
 
 def fuel_yes_since(rows: list[dict[str, Any]], fuel_key: str) -> str | None:
-    """First yes after the latest no while fuel is currently available."""
+    """Start of the most recent yes spell after a no within the selected period."""
     if not rows:
         return None
     ordered = sorted(rows, key=lambda row: row["collected_at"])
-    if ordered[-1].get(fuel_key) != "yes":
-        return None
-
     since: str | None = None
+    last_spell_start: str | None = None
     for row in ordered:
         value = row.get(fuel_key)
         if value == "no":
             since = None
         elif value == "yes" and since is None:
             since = row["collected_at"]
-    return since
+            last_spell_start = since
+    return last_spell_start
 
 
 class Storage:
