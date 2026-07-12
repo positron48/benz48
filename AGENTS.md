@@ -40,7 +40,7 @@ Push в `main` → GitHub Actions (`.github/workflows/docker-image.yml`) → `gh
 
 ## Infra (k3s)
 
-GitOps в **devops-time-host** → `apps/lipetsk-gas-monitor/`: web (2 replicas, RollingUpdate) + collector (1), PVC, Ingress gas.qantrix.ru, Flux image automation.  
+GitOps в **devops-time-host** → `apps/lipetsk-gas-monitor/`: web (1 replica, RollingUpdate) + collector (1), PVC, Ingress gas.qantrix.ru, Flux image automation.  
 Prod: `SAVE_SNAPSHOT_FILES=false`. Перенос истории: `make export-data` + `scripts/import-k3s-data.sh`.
 
 ## Локальные правила для агентов

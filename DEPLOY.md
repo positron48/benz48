@@ -40,11 +40,10 @@ Flux ImagePolicy подхватывает digest автоматически.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  lipetsk-gas-monitor-web (2 replicas, RollingUpdate)    │
-│  ┌─────────┐  ┌─────────┐                               │
-│  │  web    │  │  web    │  ← ingress / service          │
-│  └────┬────┘  └────┬────┘                               │
-│       └──────┬─────┘                                    │
+│  lipetsk-gas-monitor-web (1 replica, RollingUpdate)     │
+│  ┌─────────┐                                            │
+│  │  web    │  ← ingress / service                       │
+│  └────┬────┘                                            │
 │              │ PVC /app/data (history.db, read + write)  │
 │  ┌───────────┴───────────┐                              │
 │  │ lipetsk-gas-monitor-  │                              │
@@ -55,5 +54,5 @@ Flux ImagePolicy подхватывает digest автоматически.
     Ingress gas.qantrix.ru
 ```
 
-Web: **RollingUpdate** (`maxUnavailable: 0`) — бесшовный деплoy UI.  
+Web: **RollingUpdate** (`maxUnavailable: 0`, `maxSurge: 1`) — одна реплика, как в остальных проектах: на время деплоя поднимается новый pod и заменяет старый без двух версий UI в steady state.  
 Collector: **Recreate** — перезапуск фона не роняет сайт.

@@ -2014,7 +2014,8 @@
     function buildFuelBarSeriesData(visibleStations, timeseries, fuelKey, timeBounds) {
       const rangeEndMs = timeBounds.max;
       const data = [];
-      visibleStations.forEach((station, laneIndex) => {
+      visibleStations.forEach((station, listIndex) => {
+        const laneIndex = visibleStations.length - 1 - listIndex;
         const segments = buildFuelSegmentsForStation(
           timeseries,
           station.station_id,
@@ -2035,7 +2036,8 @@
     function buildQueueBarSeriesData(visibleStations, timeseries, timeBounds) {
       const rangeEndMs = timeBounds.max;
       const data = [];
-      visibleStations.forEach((station, laneIndex) => {
+      visibleStations.forEach((station, listIndex) => {
+        const laneIndex = visibleStations.length - 1 - listIndex;
         const segments = buildQueueSegmentsForStation(
           timeseries,
           station.station_id,
