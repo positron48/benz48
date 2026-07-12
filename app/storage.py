@@ -150,11 +150,19 @@ class Storage:
                 json.dump(payload, tmp, ensure_ascii=False, indent=2)
                 tmp_path = Path(tmp.name)
             tmp_path.replace(path)
-        indexed = self._index_snapshot(path, payload)
-        if indexed:
+        index_status = self._index_snapshot(path, payload)
+        if index_status == "full":
             logger.info("Saved snapshot %s (%s stations)", path, len(stations))
+        elif index_status == "snapshot_only":
+            logger.info(
+                "Saved unchanged snapshot %s (%s stations, observations reused)",
+                path,
+                len(stations),
+            )
+        elif index_status == "duplicate":
+            logger.info("Snapshot already indexed: %s", payload["collected_at"])
         elif save_snapshot_files_enabled():
-            logger.info("Saved snapshot file only (no changes): %s", path)
+            logger.info("Saved snapshot file only (DB unavailable): %s", path)
         else:
             logger.info("Snapshot unchanged, DB index skipped")
         return path
@@ -172,7 +180,7 @@ class Storage:
         ).fetchall()
         return {row["station_id"]: observation_signature(dict(row)) for row in rows}
 
-    def _index_snapshot(self, path: Path, payload: dict[str, Any]) -> bool:
+    def _index_snapshot(self, path: Path, payload: dict[str, Any]) -> str:
         collected_at = payload["collected_at"]
         stations = payload["stations"]
 
@@ -182,19 +190,13 @@ class Storage:
                 (collected_at,),
             ).fetchone()
             if existing:
-                logger.info("Snapshot already indexed: %s", collected_at)
-                return False
+                return "duplicate"
 
             last_signatures = self._get_last_signatures(conn)
-            if last_signatures and all(
+            unchanged = bool(last_signatures) and all(
                 last_signatures.get(station["id"]) == observation_signature(station)
                 for station in stations
-            ):
-                logger.info(
-                    "All %s stations unchanged since last scan, skipping DB index",
-                    len(stations),
-                )
-                return False
+            )
 
             cursor = conn.execute(
                 """
@@ -205,72 +207,120 @@ class Storage:
             )
             snapshot_id = cursor.lastrowid
 
-            conn.executemany(
-                """
-                INSERT INTO observations (
-                    snapshot_id, collected_at, station_id, brand, name, district,
-                    address, is_working, fuel_92, fuel_95, fuel_diesel, queue,
-                    reason, expected_working_at, last_report_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                [
-                    (
-                        snapshot_id,
-                        collected_at,
-                        s["id"],
-                        s["brand"],
-                        s["name"],
-                        s["district"],
-                        s["address"],
-                        s.get("is_working"),
-                        s.get("fuel_92"),
-                        s.get("fuel_95"),
-                        s.get("fuel_diesel"),
-                        s.get("queue"),
-                        s.get("reason"),
-                        s.get("expected_working_at"),
-                        s.get("last_report_at"),
-                    )
-                    for s in stations
-                ],
-            )
+            if not unchanged:
+                conn.executemany(
+                    """
+                    INSERT INTO observations (
+                        snapshot_id, collected_at, station_id, brand, name, district,
+                        address, is_working, fuel_92, fuel_95, fuel_diesel, queue,
+                        reason, expected_working_at, last_report_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            snapshot_id,
+                            collected_at,
+                            s["id"],
+                            s["brand"],
+                            s["name"],
+                            s["district"],
+                            s["address"],
+                            s.get("is_working"),
+                            s.get("fuel_92"),
+                            s.get("fuel_95"),
+                            s.get("fuel_diesel"),
+                            s.get("queue"),
+                            s.get("reason"),
+                            s.get("expected_working_at"),
+                            s.get("last_report_at"),
+                        )
+                        for s in stations
+                    ],
+                )
+
             conn.commit()
-            return True
+            return "snapshot_only" if unchanged else "full"
+
+    def _stations_from_payload(
+        self, payload: dict[str, Any], collected_at: str | None = None
+    ) -> list[dict[str, Any]]:
+        at = collected_at or payload["collected_at"]
+        return [
+            {
+                "station_id": station["id"],
+                "brand": station["brand"],
+                "name": station["name"],
+                "district": station["district"],
+                "address": station["address"],
+                "is_working": station.get("is_working"),
+                "fuel_92": station.get("fuel_92"),
+                "fuel_95": station.get("fuel_95"),
+                "fuel_diesel": station.get("fuel_diesel"),
+                "queue": station.get("queue"),
+                "reason": station.get("reason"),
+                "expected_working_at": station.get("expected_working_at"),
+                "last_report_at": station.get("last_report_at"),
+                "collected_at": at,
+            }
+            for station in payload["stations"]
+        ]
+
+    def _load_snapshot_payload(self, filepath: str) -> dict[str, Any] | None:
+        path = Path(filepath)
+        if not path.is_file():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Failed to read snapshot file %s: %s", path, exc)
+            return None
 
     def get_meta(self) -> dict[str, Any]:
         with self._connect() as conn:
             range_row = conn.execute(
                 """
                 SELECT MIN(collected_at) AS min_at, MAX(collected_at) AS max_at,
-                       COUNT(DISTINCT collected_at) AS snapshot_count
-                FROM observations
+                       COUNT(*) AS snapshot_count
+                FROM snapshots
                 """
             ).fetchone()
 
-            stations = conn.execute(
-                """
-                SELECT station_id, brand, name, address, district
-                FROM observations
-                GROUP BY station_id
-                ORDER BY brand, name
-                """
-            ).fetchall()
+        latest = self.get_latest()
+        if latest and latest.get("stations"):
+            station_rows = [
+                {
+                    "station_id": station["station_id"],
+                    "brand": station["brand"],
+                    "name": station["name"],
+                    "address": station["address"],
+                    "district": station.get("district"),
+                }
+                for station in latest["stations"]
+            ]
+        else:
+            with self._connect() as conn:
+                stations = conn.execute(
+                    """
+                    SELECT station_id, brand, name, address, district
+                    FROM observations
+                    GROUP BY station_id
+                    ORDER BY brand, name
+                    """
+                ).fetchall()
+            station_rows = [dict(row) for row in stations]
 
-            brands = conn.execute(
-                "SELECT DISTINCT brand FROM observations ORDER BY brand"
-            ).fetchall()
-
-        station_rows = [dict(row) for row in stations]
         for station in station_rows:
             station["region_group"] = region_group_for_district(station.get("district"))
 
+        brands = sorted({station["brand"] for station in station_rows})
         region_meta = build_region_meta(station_rows)
 
         return {
             "snapshot_count": range_row["snapshot_count"] or 0,
             "from": range_row["min_at"],
             "to": range_row["max_at"],
-            "brands": [row["brand"] for row in brands],
+            "station_count": len(station_rows),
+            "brands": brands,
             "stations": station_rows,
             **region_meta,
         }
@@ -300,11 +350,35 @@ class Storage:
                 (row["collected_at"],),
             ).fetchall()
 
+        if observations:
+            stations = [dict(o) for o in observations]
+        else:
+            payload = self._load_snapshot_payload(row["filepath"])
+            if payload:
+                stations = self._stations_from_payload(payload, row["collected_at"])
+            else:
+                with self._connect() as conn:
+                    fallback = conn.execute(
+                        """
+                        SELECT station_id, brand, name, district, address, is_working,
+                               fuel_92, fuel_95, fuel_diesel, queue, reason,
+                               expected_working_at, last_report_at, collected_at
+                        FROM observations
+                        WHERE collected_at = (
+                            SELECT MAX(collected_at) FROM observations
+                        )
+                        ORDER BY brand, name
+                        """
+                    ).fetchall()
+                stations = [
+                    {**dict(o), "collected_at": row["collected_at"]} for o in fallback
+                ]
+
         return {
             "collected_at": row["collected_at"],
             "filepath": row["filepath"],
             "station_count": row["station_count"],
-            "stations": [dict(o) for o in observations],
+            "stations": stations,
         }
 
     def query_timeseries(

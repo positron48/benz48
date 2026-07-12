@@ -4,170 +4,253 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Мониторинг топлива — Липецкая область</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;650;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
   <style>
     :root {
-      color-scheme: light;
-      --bg: #eef1f6;
-      --bg-accent: linear-gradient(135deg, #ecfdf3 0%, #eef1f6 45%, #f8fafc 100%);
-      --card: #fff;
-      --line: #e2e8f0;
-      --line-strong: #cbd5e1;
-      --text: #0f172a;
-      --muted: #64748b;
-      --accent: #15803d;
-      --accent-dark: #166534;
-      --accent-soft: #dcfce7;
-      --accent-glow: rgba(21, 128, 61, 0.12);
-      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
-      --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.06);
-      --radius: 14px;
-      --radius-sm: 10px;
-      --fuel-92: #2563eb;
-      --fuel-95: #7c3aed;
-      --fuel-diesel: #0d9488;
+      color-scheme: dark;
+      --bg-page: #070d18;
+      --surface-1: #0c1422;
+      --surface-2: #101a2b;
+      --surface-3: #152136;
+      --surface-hover: #192740;
+      --border: #213049;
+      --border-soft: rgba(120, 145, 180, 0.16);
+      --border-focus: #27c6c9;
+      --text-primary: #edf3fb;
+      --text-secondary: #95a3b8;
+      --text-muted: #68778e;
+      --accent: #24c7c8;
+      --accent-hover: #43dcdb;
+      --accent-soft: rgba(36, 199, 200, 0.13);
+      --green: #40d38a;
+      --green-soft: rgba(64, 211, 138, 0.12);
+      --red: #ff625f;
+      --red-soft: rgba(255, 98, 95, 0.12);
+      --blue: #4b83ff;
+      --purple: #a759f5;
+      --orange: #f7ad32;
+      --cyan: #39bedc;
+      --radius-sm: 7px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-panel: 0 12px 40px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.015);
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --fuel-92: #4788ff;
+      --fuel-95: #40d38a;
+      --fuel-diesel: #a759f5;
+      --stations-active: #ff514d;
     }
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+      scrollbar-width: thin;
+      scrollbar-color: #33445f transparent;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #33445f; border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #405472; }
     body {
       margin: 0;
-      font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--bg-accent);
-      background-attachment: fixed;
-      color: var(--text);
+      background:
+        radial-gradient(circle at 50% -20%, rgba(42, 65, 105, 0.16), transparent 42%),
+        var(--bg-page);
+      color: var(--text-primary);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       line-height: 1.45;
     }
-    main {
-      max-width: 1440px;
+    .dashboard {
+      width: 100%;
+      max-width: 1920px;
       margin: 0 auto;
-      padding: 24px 20px 40px;
+      padding: var(--space-5) var(--space-6) 32px;
+      box-sizing: border-box;
     }
     .page-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 16px;
-      margin-bottom: 20px;
+      gap: var(--space-4);
+      margin-bottom: var(--space-3);
     }
-    .eyebrow {
-      margin: 0 0 6px;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--accent);
-    }
-    h1 {
+    .page-region {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      color: #b7c2d2;
       margin: 0;
-      font-size: clamp(26px, 4vw, 34px);
+    }
+    .page-title {
+      margin: 5px 0 4px;
+      font-size: clamp(24px, 3vw, 32px);
       line-height: 1.15;
-      letter-spacing: -0.02em;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      color: var(--text-primary);
     }
-    h2 {
+    .page-period {
       margin: 0;
-      font-size: 17px;
-      letter-spacing: -0.01em;
+      font-size: 13px;
+      color: var(--text-secondary);
     }
-    .subtitle {
-      color: var(--muted);
-      margin: 8px 0 0;
-      font-size: 14px;
-    }
-    .live-badge {
+    .update-status {
       flex-shrink: 0;
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: var(--card);
-      border: 1px solid var(--line);
-      box-shadow: var(--shadow-sm);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 13px;
+      border-radius: var(--radius-sm);
+      background: rgba(12, 21, 36, 0.88);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
       font-size: 12px;
-      font-weight: 600;
-      color: var(--muted);
       white-space: nowrap;
     }
-    .live-badge::before {
+    .update-status::before {
       content: "";
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      margin-right: 6px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      background: #22c55e;
-      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
-      vertical-align: 1px;
+      background: var(--green);
+      box-shadow: 0 0 0 4px rgba(64, 211, 138, 0.10);
+      flex-shrink: 0;
     }
-    .panel, .card {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow-md);
-      margin-bottom: 18px;
+    .panel {
+      background: linear-gradient(180deg, rgba(17, 27, 45, 0.96), rgba(10, 18, 31, 0.96));
+      border: 1px solid rgba(93, 119, 157, 0.28);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-panel);
+      margin-bottom: 10px;
+      padding: 14px 16px;
     }
-    .panel { padding: 18px; }
-    .card { padding: 18px 18px 16px; }
+    .panel-title {
+      margin: 0;
+      color: var(--text-primary);
+      font-size: 14px;
+      line-height: 20px;
+      font-weight: 650;
+    }
     .card-head {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 14px;
+      gap: var(--space-3);
+      margin-bottom: 10px;
       flex-wrap: wrap;
     }
     .card-head .card-desc {
       margin: 0;
-      font-size: 13px;
-      color: var(--muted);
-    }
-    .filters-panel { display: flex; flex-direction: column; gap: 16px; }
-    .panel-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .search-block { flex: 1; min-width: 260px; }
-    label {
-      display: block;
       font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 6px;
+      color: var(--text-secondary);
     }
+    .filters-panel {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+    .filters-toolbar {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .filters-toggle {
+      width: auto;
+      min-width: 112px;
+      height: 38px;
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      font-weight: 650;
+      font-size: 12px;
+      box-shadow: none;
+    }
+    .filters-toggle:hover {
+      background: rgba(255, 255, 255, 0.06);
+      filter: none;
+    }
+    .filters-toggle__icon {
+      color: var(--accent);
+      font-size: 11px;
+      line-height: 1;
+    }
+    .filters-body {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+    .filters-panel--collapsed .filters-body {
+      display: none;
+    }
+    .filters-search-row {
+      display: grid;
+      grid-template-columns: minmax(300px, 520px) 1fr auto auto;
+      gap: 10px;
+      align-items: start;
+      flex: 1;
+      min-width: 0;
+    }
+    .filters-panel--collapsed .filters-search-row {
+      grid-template-columns: minmax(220px, 420px) 1fr;
+    }
+    .field-label {
+      display: block;
+      margin-bottom: 7px;
+      color: #c0cada;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .date-field .field-label { margin-bottom: 4px; }
     input, select, button {
       width: 100%;
-      min-height: 40px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius-sm);
+      min-height: 38px;
       padding: 0 12px;
+      color: var(--text-primary);
+      background: #111c2e;
+      border: 1px solid #273753;
+      border-radius: var(--radius-sm);
       font: inherit;
-      background: #fff;
-      color: var(--text);
-      transition: border-color 0.15s, box-shadow 0.15s;
+      transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
     }
-    input:focus, select:focus {
+    input::placeholder { color: #66758a; }
+    input:focus, select:focus, button:focus-visible {
       outline: none;
-      border-color: #86efac;
-      box-shadow: 0 0 0 3px var(--accent-glow);
+      border-color: rgba(36, 199, 200, 0.75);
+      box-shadow: 0 0 0 3px rgba(36, 199, 200, 0.10);
     }
     input[type="search"] {
-      min-height: 44px;
-      padding-left: 14px;
-      font-size: 15px;
-      border-color: var(--line-strong);
-      background: #f8fafc;
-    }
-    select[multiple] {
-      min-height: 132px;
-      padding: 8px;
       font-size: 13px;
-      background: #fafbfc;
     }
-    select[multiple] option {
-      padding: 6px 8px;
-      border-radius: 6px;
-      margin-bottom: 2px;
+    input[type="datetime-local"] {
+      color-scheme: dark;
+      font-size: 12px;
+    }
+    input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      min-height: 0;
+      padding: 0;
+      margin: 0;
+      border-radius: 3px;
+      border: 1px solid #3c4e68;
+      background: #101b2c;
+      accent-color: var(--accent);
+      cursor: pointer;
+      flex-shrink: 0;
     }
     .filter-picker {
       display: flex;
@@ -176,11 +259,9 @@
       min-width: 0;
     }
     .filter-picker-search {
-      min-height: 34px;
-      padding: 6px 10px;
-      font-size: 13px;
-      border-color: var(--line-strong);
-      background: #fff;
+      min-height: 30px;
+      padding: 0 10px;
+      font-size: 12px;
     }
     .filter-picker-toolbar {
       display: flex;
@@ -195,21 +276,24 @@
       font-weight: 600;
       background: none;
       border: none;
-      color: var(--accent-dark);
+      color: var(--accent);
       cursor: pointer;
+      box-shadow: none;
     }
     .filter-picker-toolbar button:hover {
       background: none;
+      color: var(--accent-hover);
       text-decoration: underline;
+      filter: none;
     }
     .filter-picker-list {
-      height: 200px;
-      min-height: 200px;
-      max-height: 200px;
+      height: 160px;
+      min-height: 160px;
+      max-height: 160px;
       overflow-y: auto;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-sm);
+      background: rgba(8, 15, 27, 0.4);
       padding: 4px;
     }
     .filter-picker-item {
@@ -217,95 +301,123 @@
       align-items: flex-start;
       gap: 8px;
       padding: 6px 8px;
-      border-radius: 6px;
+      border-radius: 5px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12px;
       line-height: 1.35;
+      color: #c3cede;
     }
-    .filter-picker-item:hover { background: #f1f5f9; }
-    .filter-picker-item input {
-      width: auto;
-      min-height: 0;
-      margin-top: 2px;
-      flex-shrink: 0;
-      cursor: pointer;
-    }
+    .filter-picker-item:hover { background: rgba(255, 255, 255, 0.035); }
+    .filter-picker-item input { margin-top: 1px; }
     .filter-picker-label {
       min-width: 0;
-      word-break: break-word;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .filter-picker-empty {
       padding: 16px 10px;
       text-align: center;
       font-size: 12px;
-      color: var(--muted);
+      color: var(--text-muted);
     }
     button {
-      background: var(--accent);
-      color: #fff;
-      border-color: var(--accent);
-      font-weight: 700;
       cursor: pointer;
+      font-weight: 650;
     }
-    button:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
-    button.secondary {
-      background: #fff;
-      color: var(--text);
-      border-color: var(--line-strong);
-    }
-    button.secondary:hover { background: #f8fafc; }
-    .chip-btn {
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .button-primary {
       width: auto;
-      min-height: 32px;
+      min-width: 120px;
+      height: 38px;
+      padding: 0 20px;
+      border: 1px solid rgba(36, 199, 200, 0.75);
+      border-radius: var(--radius-sm);
+      color: #f5ffff;
+      font-weight: 650;
+      background: linear-gradient(90deg, #159eaa, #36c7bc);
+      box-shadow: 0 0 18px rgba(36, 199, 200, 0.16);
+    }
+    .button-primary:hover {
+      filter: brightness(1.08);
+      box-shadow: 0 0 24px rgba(36, 199, 200, 0.24);
+    }
+    .button-reset {
+      width: auto;
+      min-width: auto;
+      height: 38px;
       padding: 0 12px;
+      color: var(--text-secondary);
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      font-weight: 600;
+    }
+    .button-reset:hover {
+      color: var(--text-primary);
+      background: transparent;
+      filter: none;
+    }
+    .button-text {
+      width: auto;
+      min-height: 0;
+      height: auto;
+      padding: 0;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      background: transparent;
+      border: none;
+      box-shadow: none;
+    }
+    .button-text:hover {
+      color: var(--accent-hover);
+      background: transparent;
+      text-decoration: underline;
+      filter: none;
+    }
+    .period-chip {
+      width: auto;
+      height: 30px;
+      padding: 0 12px;
+      border-radius: 15px;
+      color: #9cabbe;
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid var(--border);
       font-size: 12px;
       font-weight: 600;
-      border-radius: 999px;
-      background: #f1f5f9;
-      color: var(--muted);
-      border: 1px solid transparent;
+      box-shadow: none;
     }
-    .chip-btn:hover { background: #e2e8f0; color: var(--text); }
-    .chip-btn.active {
-      background: var(--accent-soft);
-      color: var(--accent-dark);
-      border-color: #bbf7d0;
+    .period-chip:hover {
+      color: #dce5f2;
+      background: rgba(255, 255, 255, 0.04);
+      filter: none;
+    }
+    .period-chip.active {
+      color: #5de1c2;
+      border-color: rgba(64, 211, 138, 0.36);
+      background: rgba(64, 211, 138, 0.08);
     }
     .filters-grid {
       display: grid;
-      grid-template-columns: minmax(200px, 0.95fr) repeat(4, minmax(160px, 1fr));
-      gap: 14px;
+      grid-template-columns:
+        minmax(280px, 1.1fr)
+        minmax(180px, 0.7fr)
+        minmax(180px, 0.7fr)
+        minmax(220px, 0.9fr)
+        minmax(180px, 0.7fr);
+      gap: var(--space-3);
       align-items: stretch;
     }
     .filter-group {
-      background: #f8fafc;
-      border: 1px solid var(--line);
-      border-radius: var(--radius-sm);
-      padding: 12px;
       min-width: 0;
       display: flex;
       flex-direction: column;
     }
-    .filter-group:has(.filter-picker) .filter-picker {
-      flex: 1;
-    }
-    .group-label {
-      display: block;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
+    .filter-group:has(.filter-picker) .filter-picker { flex: 1; }
     .date-fields {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-    }
-    .date-field label {
-      display: block;
-      margin-bottom: 4px;
+      gap: var(--space-2);
     }
     .preset-row {
       display: flex;
@@ -314,17 +426,17 @@
       margin-top: 10px;
     }
     .filter-hint {
-      margin-top: 8px;
-      font-size: 11px;
+      margin-top: 6px;
+      font-size: 10px;
       line-height: 1.35;
-      color: var(--muted);
+      color: var(--text-muted);
     }
     .filters-actions {
       display: flex;
       gap: 10px;
       justify-content: flex-end;
+      align-items: center;
     }
-    .filters-actions button { width: auto; min-width: 120px; }
     .filter-chips {
       display: flex;
       flex-wrap: wrap;
@@ -336,460 +448,566 @@
       align-items: center;
       padding: 5px 10px;
       border-radius: 999px;
-      background: #f1f5f9;
-      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-soft);
       font-size: 12px;
       font-weight: 600;
-      color: var(--text);
+      color: var(--text-primary);
     }
-    .chip-muted { color: var(--muted); font-weight: 500; }
-    .stats-wrap {
-      display: grid;
-      grid-template-columns: minmax(280px, 0.9fr) minmax(420px, 1.4fr);
-      gap: 14px;
-      margin-bottom: 18px;
-    }
-    .stats-meta, .stats-fuel {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow-md);
-      padding: 14px;
-    }
-    .stats-meta {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-    }
-    .stat-meta-item {
-      padding: 12px;
-      border-radius: var(--radius-sm);
-      background: linear-gradient(180deg, #fafbfc 0%, #f8fafc 100%);
-      border: 1px solid var(--line);
-      min-width: 0;
-    }
-    .stat-meta-item .value {
-      font-size: clamp(18px, 2.2vw, 24px);
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      line-height: 1.1;
-      word-break: break-word;
-    }
-    .stat-meta-item .value.small { font-size: 13px; font-weight: 700; line-height: 1.35; }
-    .stat-meta-item .label {
-      margin-top: 6px;
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-    }
-    .stats-fuel {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-    }
-    .stat-fuel {
-      padding: 12px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--line);
-      background: #fff;
-    }
-    .stat-fuel-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 8px;
+    .chip-muted { color: var(--text-secondary); font-weight: 500; }
+    .stats-bar {
       margin-bottom: 10px;
     }
-    .stat-fuel-name {
+    .stats-bar__inner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 14px;
+      padding: 9px 14px;
+      border-radius: 9px;
+      background: linear-gradient(140deg, rgba(17, 29, 48, 0.98), rgba(11, 19, 33, 0.98));
+      border: 1px solid var(--border);
       font-size: 13px;
-      font-weight: 800;
-      letter-spacing: -0.01em;
+      line-height: 1.3;
+      color: var(--text-secondary);
     }
-    .stat-fuel-pct {
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      line-height: 1;
+    .stats-bar__inner--empty {
+      justify-content: center;
+      color: var(--text-muted);
     }
-    .stat-fuel.fuel-92 .stat-fuel-name, .stat-fuel.fuel-92 .stat-fuel-pct { color: var(--fuel-92); }
-    .stat-fuel.fuel-95 .stat-fuel-name, .stat-fuel.fuel-95 .stat-fuel-pct { color: var(--fuel-95); }
-    .stat-fuel.fuel-diesel .stat-fuel-name, .stat-fuel.fuel-diesel .stat-fuel-pct { color: var(--fuel-diesel); }
-    .stat-bar {
-      height: 8px;
-      border-radius: 999px;
-      background: #eef2f7;
-      overflow: hidden;
+    .stats-bar__updated {
+      color: var(--text-primary);
+      font-weight: 600;
+      white-space: nowrap;
     }
-    .stat-bar-fill {
-      height: 100%;
-      border-radius: inherit;
-      transition: width 0.35s ease;
+    .stats-bar__updated time {
+      font-weight: 500;
+      color: var(--text-secondary);
     }
-    .stat-fuel.fuel-92 .stat-bar-fill { background: linear-gradient(90deg, #60a5fa, var(--fuel-92)); }
-    .stat-fuel.fuel-95 .stat-bar-fill { background: linear-gradient(90deg, #a78bfa, var(--fuel-95)); }
-    .stat-fuel.fuel-diesel .stat-bar-fill { background: linear-gradient(90deg, #2dd4bf, var(--fuel-diesel)); }
-    .stat-fuel-foot {
-      margin-top: 8px;
+    .stats-bar__sep {
+      width: 1px;
+      height: 14px;
+      background: var(--border-soft);
+      flex-shrink: 0;
+    }
+    .stats-bar__metric {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .stats-bar__fuel {
       font-size: 11px;
-      color: var(--muted);
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
+    .stats-bar__fuel--92 { color: var(--fuel-92); }
+    .stats-bar__fuel--95 { color: var(--fuel-95); }
+    .stats-bar__fuel--diesel { color: var(--fuel-diesel); }
+    .stats-bar__pct {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+    }
+    .stats-bar__count {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .stats-bar__meta {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .content-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .content-stack > .panel { margin-bottom: 0; }
+    .availability-panel { padding: 0; overflow: visible; }
+    .availability-panel > .card-head {
+      padding: 12px 14px 0;
+    }
+    .availability-layout {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      min-height: 330px;
+    }
+    .station-list {
+      padding: 12px;
+      border-right: 1px solid var(--border-soft);
+      background: rgba(8, 15, 27, 0.28);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .station-list__search {
+      height: 30px;
+      min-height: 30px;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .legend-toolbar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 8px;
+      flex-shrink: 0;
+    }
+    .legend-list {
+      overflow-y: auto;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+      min-height: 0;
+    }
+    .legend-item {
+      display: grid;
+      grid-template-columns: 14px 8px minmax(0, 1fr);
+      gap: 7px;
+      padding: 6px 4px;
+      align-items: start;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1.35;
+      transition: background 140ms ease;
+    }
+    .legend-item:hover { background: rgba(255, 255, 255, 0.035); }
+    .legend-item input { margin-top: 1px; }
+    .legend-item.off { opacity: 0.45; }
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+    .legend-label { min-width: 0; }
+    .station-row__brand {
+      color: #dce5f1;
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .station-row__address {
+      margin-top: 2px;
+      color: #78879c;
+      font-size: 10px;
+      line-height: 1.25;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .timeline-area {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: visible;
+    }
+    .fuel-charts-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-width: 0;
+      flex: 1;
+    }
+    .fuel-chart-block {
+      border-top: 1px solid var(--border-soft);
+      padding: 0;
+    }
+    .fuel-chart-block:first-child { border-top: none; }
+    .timeline-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px 6px;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+    }
+    .timeline-header h3 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 650;
+      color: var(--text-primary);
+    }
+    .fuel-chart-block[data-fuel-key="fuel_92"] .timeline-header h3 { color: var(--fuel-92); }
+    .fuel-chart-block[data-fuel-key="fuel_95"] .timeline-header h3 { color: var(--fuel-95); }
+    .fuel-chart-block[data-fuel-key="fuel_diesel"] .timeline-header h3 { color: var(--fuel-diesel); }
     .state-legend {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
-      margin-bottom: 10px;
+      gap: 10px;
+      color: var(--text-secondary);
+      font-size: 11px;
     }
     .pill {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      padding: 4px 10px;
-      border-radius: 999px;
       font-size: 11px;
-      font-weight: 700;
-      border: 1px solid transparent;
-    }
-    .pill-yes { background: #ecfdf3; color: #166534; border-color: #bbf7d0; }
-    .pill-no { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
-    .pill-off { background: #f8fafc; color: #475569; border-color: #e2e8f0; }
-    .chart { width: 100%; height: 360px; min-width: 0; }
-    .chart-compact { min-height: 280px; height: auto; }
-    .fuel-charts-stack {
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-      min-width: 0;
-    }
-    .fuel-chart-block {
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius-sm);
-      background: linear-gradient(180deg, #fff 0%, #fafbfc 100%);
-    }
-    .fuel-chart-block h3 {
-      margin: 0;
-      font-size: 15px;
-      font-weight: 800;
-    }
-    .chart-panel {
-      display: grid;
-      grid-template-columns: minmax(240px, 280px) 1fr;
-      gap: 14px;
-      align-items: stretch;
-    }
-    .chart-legend {
-      border: 1px solid var(--line);
-      border-radius: var(--radius-sm);
-      background: #f8fafc;
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-      position: sticky;
-      top: 20px;
-      align-self: start;
-      overflow: hidden;
-    }
-    .legend-toolbar {
-      display: flex;
-      gap: 6px;
-      padding: 8px;
-      border-bottom: 1px solid var(--line);
-      flex-shrink: 0;
-      background: #fff;
-    }
-    .legend-toolbar button {
-      min-height: 30px;
-      padding: 0 10px;
-      font-size: 12px;
       font-weight: 600;
     }
-    .legend-list {
-      overflow-y: auto;
-      overflow-x: hidden;
-      padding: 8px;
+    .pill-yes { color: var(--green); }
+    .pill-no { color: var(--red); }
+    .pill-off { color: var(--text-muted); }
+    .chart { width: 100%; height: 360px; min-width: 0; overflow: visible; }
+    .chart-compact { min-height: 200px; height: auto; overflow: visible; }
+    .share-chart-panel {
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      flex: 1;
-      max-height: 760px;
     }
-    .legend-item {
+    .share-chart-panel .chart {
+      height: 300px;
+      min-height: 300px;
+      max-height: 300px;
+      flex: none;
+    }
+    .queue-panel { padding: 14px 16px; }
+    .queue-panel .availability-layout { min-height: 280px; }
+    .table-panel {
+      padding: 0;
+      overflow: hidden;
+    }
+    .table-panel__header {
+      min-height: 40px;
+      padding: 0 14px;
       display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      font-size: 12px;
-      line-height: 1.35;
-      cursor: pointer;
-      word-break: break-word;
-      padding: 6px 8px;
-      border-radius: 8px;
-      transition: background 0.12s;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-soft);
     }
-    .legend-item:hover { background: #eef2f7; }
-    .legend-item input { width: auto; min-height: auto; margin-top: 2px; flex-shrink: 0; }
-    .legend-item.off { opacity: 0.45; }
-    .legend-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      margin-top: 3px;
-      flex-shrink: 0;
-    }
-    .legend-label { flex: 1; min-width: 0; }
-    @media (max-width: 1100px) {
-      .filters-grid { grid-template-columns: 1fr 1fr; }
-      .filter-group:first-child { grid-column: 1 / -1; }
-      .stats-wrap { grid-template-columns: 1fr; }
-    }
-    @media (max-width: 900px) {
-      .chart-panel { grid-template-columns: 1fr; }
-      .chart-legend { max-height: 220px; min-height: 220px; position: static; }
-      .stats-meta, .stats-fuel { grid-template-columns: 1fr; }
-      .filters-grid { grid-template-columns: 1fr; }
-      .filters-actions { justify-content: stretch; }
-      .filters-actions button { flex: 1; }
-      .page-header { flex-direction: column; }
-    }
-    .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
-    table {
+    .table-scroll { overflow-x: auto; }
+    .data-table {
       width: 100%;
+      min-width: 1050px;
       border-collapse: collapse;
-      font-size: 13px;
-      background: #fff;
+      table-layout: fixed;
     }
-    th, td {
-      border-bottom: 1px solid var(--line);
-      padding: 10px 12px;
+    .data-table th {
+      height: 34px;
+      padding: 0 12px;
+      color: #77869b;
+      background: rgba(255, 255, 255, 0.015);
+      border-bottom: 1px solid var(--border-soft);
+      font-size: 10px;
+      font-weight: 600;
       text-align: left;
-      vertical-align: top;
-    }
-    th {
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.03em;
+      letter-spacing: 0.04em;
       white-space: nowrap;
       user-select: none;
-      background: #f8fafc;
     }
-    th.sortable { cursor: pointer; }
-    th.sortable:hover { color: var(--text); }
-    th .sort-mark { opacity: 0.35; margin-left: 4px; }
-    th.sorted .sort-mark { opacity: 1; color: var(--accent); }
-    .badge {
-      display: inline-block;
-      padding: 3px 9px;
-      border-radius: 999px;
+    .data-table td {
+      height: 38px;
+      padding: 4px 12px;
+      color: #aeb9c9;
+      border-bottom: 1px solid rgba(120, 145, 180, 0.09);
       font-size: 11px;
-      font-weight: 700;
+      vertical-align: middle;
     }
-    .badge.yes { background: var(--accent-soft); color: var(--accent-dark); }
-    .badge.no { background: #fee2e2; color: #991b1b; }
-    .badge.unknown { background: #f1f5f9; color: #64748b; }
-    .empty { color: var(--muted); padding: 28px; text-align: center; }
-    .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
-    .site-footer {
-      margin-top: 8px;
-      padding: 16px 4px 8px;
+    .data-table tbody tr:hover { background: rgba(255, 255, 255, 0.025); }
+    .data-table th.sortable { cursor: pointer; }
+    .data-table th.sortable:hover { color: var(--text-primary); }
+    .data-table th .sort-mark { opacity: 0.35; margin-left: 4px; }
+    .data-table th.sorted .sort-mark { opacity: 1; color: var(--accent); }
+    .station-cell__brand {
+      color: #e8eef7;
+      font-weight: 650;
+      font-size: 11px;
+    }
+    .station-cell__address {
+      color: #77869a;
+      font-size: 10px;
+      margin-top: 2px;
+    }
+    .status-positive {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      height: 20px;
+      padding: 0 8px;
+      color: #62e09a;
+      background: rgba(64, 211, 138, 0.10);
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .status-negative {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      height: 20px;
+      padding: 0 8px;
+      color: #ff7672;
+      background: rgba(255, 98, 95, 0.10);
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .status-unknown {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      height: 20px;
+      padding: 0 8px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .empty {
+      color: var(--text-muted);
+      padding: 28px;
       text-align: center;
       font-size: 12px;
-      color: var(--muted);
+    }
+    .site-footer {
+      margin-top: var(--space-3);
+      padding: var(--space-4) 4px var(--space-2);
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
       line-height: 1.6;
     }
     .site-footer a {
-      color: var(--muted);
+      color: var(--text-secondary);
       text-decoration: none;
       font-weight: 600;
       border-bottom: 1px solid transparent;
-      transition: color 0.15s, border-color 0.15s;
+      transition: color 140ms ease, border-color 140ms ease;
     }
     .site-footer a:hover {
       color: var(--accent);
-      border-bottom-color: #bbf7d0;
+      border-bottom-color: rgba(36, 199, 200, 0.4);
     }
     .site-footer-sep { margin: 0 10px; opacity: 0.35; }
+    @media (max-width: 1439px) {
+      .filters-grid { grid-template-columns: 1fr 1fr; }
+      .filter-group:first-child { grid-column: 1 / -1; }
+      .stats-bar__meta { margin-left: 0; width: 100%; }
+      .stats-bar__sep { display: none; }
+    }
+    @media (max-width: 1099px) {
+      .dashboard { padding: 14px 16px 24px; }
+      .filters-toolbar { flex-wrap: wrap; }
+      .filters-search-row { grid-template-columns: 1fr; }
+      .filters-grid { grid-template-columns: 1fr 1fr; }
+      .availability-layout { grid-template-columns: 240px minmax(0, 1fr); }
+    }
+    @media (max-width: 767px) {
+      .dashboard { padding: 14px; }
+      .filters-grid,
+      .availability-layout { grid-template-columns: 1fr; }
+      .availability-layout { min-height: auto; }
+      .station-list { border-right: none; border-bottom: 1px solid var(--border-soft); max-height: 220px; }
+      .page-header { flex-direction: column; }
+      .filters-actions { justify-content: stretch; }
+      .filters-actions .button-primary { flex: 1; }
+    }
   </style>
 </head>
 <body>
-  <main>
+  <main class="dashboard">
     <header class="page-header">
       <div>
-        <p class="eyebrow">Липецкая область · мониторинг АЗС</p>
-        <h1>Мониторинг топлива</h1>
-        <p class="subtitle" id="subtitle">Загрузка данных...</p>
+        <p class="page-region">Липецкая область</p>
+        <h1 class="page-title">Мониторинг топлива</h1>
+        <p class="page-period" id="subtitle">Загрузка данных...</p>
       </div>
-      <div class="live-badge">обновление каждые 5 мин</div>
+      <div class="update-status">Обновление каждые 5 минут</div>
     </header>
 
-    <section class="panel filters-panel">
-      <div class="panel-top">
-        <h2>Фильтры</h2>
-        <div class="filter-chips" id="filterNote"></div>
+    <section class="stats-bar" id="stats" aria-live="polite"></section>
+
+    <section class="panel filters-panel filters-panel--collapsed" id="filtersPanel">
+      <div class="filters-toolbar">
+        <button type="button" class="filters-toggle" id="filtersToggle" aria-expanded="false" aria-controls="filtersBody">
+          <span class="filters-toggle__icon" aria-hidden="true">▸</span>
+          Фильтры
+        </button>
+        <div class="filters-search-row">
+          <input type="search" id="search" placeholder="Быстрый поиск: название, адрес, бренд">
+          <div class="filter-chips" id="filterNote"></div>
+        </div>
       </div>
 
-      <div class="search-block">
-        <label for="search">Быстрый поиск</label>
-        <input type="search" id="search" placeholder="Название, адрес, бренд — графики обновляются сразу">
-        <div class="hint">Фильтрует все графики и таблицы мгновенно</div>
-      </div>
-
+      <div class="filters-body" id="filtersBody">
       <div class="filters-grid">
         <div class="filter-group">
-          <span class="group-label">Период</span>
+          <span class="field-label">Период</span>
           <div class="date-fields">
             <div class="date-field">
-              <label for="from">С</label>
+              <label class="field-label" for="from">С</label>
               <input type="datetime-local" id="from">
             </div>
             <div class="date-field">
-              <label for="to">По</label>
+              <label class="field-label" for="to">По</label>
               <input type="datetime-local" id="to">
             </div>
           </div>
           <div class="preset-row">
-            <button type="button" class="chip-btn" data-preset="12">±12 ч</button>
-            <button type="button" class="chip-btn active" data-preset="24">±24 ч</button>
-            <button type="button" class="chip-btn" data-preset="72">3 дня</button>
+            <button type="button" class="period-chip" data-preset="12">±12 ч</button>
+            <button type="button" class="period-chip active" data-preset="24">±24 ч</button>
+            <button type="button" class="period-chip" data-preset="72">3 дня</button>
           </div>
         </div>
         <div class="filter-group">
-          <span class="group-label">Регион</span>
+          <span class="field-label">Регион</span>
           <div class="filter-picker" id="regions">
             <input type="search" class="filter-picker-search" placeholder="Поиск региона..." aria-label="Поиск по регионам">
             <div class="filter-picker-toolbar">
-              <button type="button" data-action="select-visible">Отметить видимые</button>
-              <button type="button" data-action="clear-visible">Снять видимые</button>
+              <button type="button" class="button-text" data-action="select-visible">Отметить видимые</button>
+              <button type="button" class="button-text" data-action="clear-visible">Снять видимые</button>
             </div>
             <div class="filter-picker-list" role="group" aria-label="Регион"></div>
           </div>
-          <div class="filter-hint">Кластеры по муниципалитетам, без одиночных МО</div>
+          <div class="filter-hint">Кластеры по муниципалитетам</div>
         </div>
         <div class="filter-group">
-          <span class="group-label">Бренды</span>
+          <span class="field-label">Бренды</span>
           <div class="filter-picker" id="brands">
             <input type="search" class="filter-picker-search" placeholder="Поиск бренда..." aria-label="Поиск по брендам">
             <div class="filter-picker-toolbar">
-              <button type="button" data-action="select-visible">Отметить видимые</button>
-              <button type="button" data-action="clear-visible">Снять видимые</button>
+              <button type="button" class="button-text" data-action="select-visible">Отметить видимые</button>
+              <button type="button" class="button-text" data-action="clear-visible">Снять видимые</button>
             </div>
             <div class="filter-picker-list" role="group" aria-label="Бренды"></div>
           </div>
         </div>
         <div class="filter-group">
-          <span class="group-label">АЗС</span>
+          <span class="field-label">АЗС</span>
           <div class="filter-picker" id="stations">
             <input type="search" class="filter-picker-search" placeholder="Поиск АЗС..." aria-label="Поиск по АЗС">
             <div class="filter-picker-toolbar">
-              <button type="button" data-action="select-visible">Отметить видимые</button>
-              <button type="button" data-action="clear-visible">Снять видимые</button>
+              <button type="button" class="button-text" data-action="select-visible">Отметить видимые</button>
+              <button type="button" class="button-text" data-action="clear-visible">Снять видимые</button>
             </div>
             <div class="filter-picker-list" role="group" aria-label="АЗС"></div>
           </div>
         </div>
         <div class="filter-group">
-          <span class="group-label">Сейчас есть</span>
+          <span class="field-label">Сейчас есть</span>
           <div class="filter-picker" id="currentlyHas">
             <input type="search" class="filter-picker-search" placeholder="Поиск топлива..." aria-label="Поиск по видам топлива">
             <div class="filter-picker-toolbar">
-              <button type="button" data-action="select-visible">Отметить видимые</button>
-              <button type="button" data-action="clear-visible">Снять видимые</button>
+              <button type="button" class="button-text" data-action="select-visible">Отметить видимые</button>
+              <button type="button" class="button-text" data-action="clear-visible">Снять видимые</button>
             </div>
             <div class="filter-picker-list" role="group" aria-label="Сейчас есть"></div>
           </div>
-          <div class="filter-hint">Только АЗС, где выбранное топливо есть сейчас</div>
+          <div class="filter-hint">Только АЗС с выбранным топливом сейчас</div>
         </div>
       </div>
 
       <div class="filters-actions">
-        <button class="secondary" id="reset" type="button">Сброс</button>
-        <button id="apply">Применить период</button>
+        <button class="button-reset" id="reset" type="button">Сброс</button>
+        <button class="button-primary" id="apply">Применить период</button>
+      </div>
       </div>
     </section>
 
-    <section class="stats-wrap" id="stats"></section>
-
-    <section class="card" id="fuelChartsSection">
-      <div class="card-head">
-        <h2>Наличие топлива по АЗС</h2>
-        <p class="card-desc" id="fuelChartsDesc">Каждая АЗС — отдельная полоса на временной шкале</p>
-      </div>
-      <div class="chart-panel">
-        <div class="chart-legend">
-          <div class="legend-toolbar">
-            <button type="button" class="secondary" id="fuelHideAll">Снять все</button>
-            <button type="button" class="secondary" id="fuelShowAll">Показать все</button>
-          </div>
-          <div class="legend-list" id="fuelLegend"></div>
+    <div class="content-stack">
+      <section class="panel table-panel">
+        <div class="table-panel__header">
+          <h2 class="panel-title">Когда появилось топливо</h2>
         </div>
-        <div class="fuel-charts-stack">
-          <div class="fuel-chart-block" data-fuel-key="fuel_92">
-            <h3>АИ-92</h3>
-            <div class="state-legend">
-              <span class="pill pill-yes">✓ есть</span>
-              <span class="pill pill-no">✗ нет</span>
-              <span class="pill pill-off">⊘ не работает</span>
-              <span class="pill chip-muted">метки при смене</span>
+        <div class="table-scroll" id="fuelSinceTable"></div>
+      </section>
+
+      <article class="panel share-chart-panel">
+        <div class="chart-panel-header card-head">
+          <h2 class="panel-title">Доля АЗС с топливом</h2>
+        </div>
+        <div id="summaryChart" class="chart"></div>
+      </article>
+
+      <article class="panel availability-panel" id="fuelChartsSection">
+        <div class="card-head">
+          <h2 class="panel-title">Наличие топлива по АЗС</h2>
+          <p class="card-desc" id="fuelChartsDesc">Каждая АЗС — отдельная полоса на временной шкале</p>
+        </div>
+        <div class="availability-layout">
+          <aside class="station-list">
+            <div class="legend-toolbar">
+              <button type="button" class="button-text" id="fuelHideAll">Снять все</button>
+              <button type="button" class="button-text" id="fuelShowAll">Показать все</button>
             </div>
-            <div id="fuelChart92" class="chart chart-compact"></div>
-          </div>
-          <div class="fuel-chart-block" data-fuel-key="fuel_95">
-            <h3>АИ-95</h3>
-            <div class="state-legend">
-              <span class="pill pill-yes">✓ есть</span>
-              <span class="pill pill-no">✗ нет</span>
-              <span class="pill pill-off">⊘ не работает</span>
-              <span class="pill chip-muted">метки при смене</span>
+            <div class="legend-list" id="fuelLegend"></div>
+          </aside>
+          <div class="timeline-area">
+            <div class="fuel-charts-stack">
+              <div class="fuel-chart-block" data-fuel-key="fuel_92">
+                <div class="timeline-header">
+                  <h3>АИ-92</h3>
+                  <div class="state-legend">
+                    <span class="pill pill-yes">✓ есть</span>
+                    <span class="pill pill-no">✗ нет</span>
+                    <span class="pill pill-off">⊘ не работает</span>
+                  </div>
+                </div>
+                <div id="fuelChart92" class="chart chart-compact"></div>
+              </div>
+              <div class="fuel-chart-block" data-fuel-key="fuel_95">
+                <div class="timeline-header">
+                  <h3>АИ-95</h3>
+                  <div class="state-legend">
+                    <span class="pill pill-yes">✓ есть</span>
+                    <span class="pill pill-no">✗ нет</span>
+                    <span class="pill pill-off">⊘ не работает</span>
+                  </div>
+                </div>
+                <div id="fuelChart95" class="chart chart-compact"></div>
+              </div>
+              <div class="fuel-chart-block" data-fuel-key="fuel_diesel">
+                <div class="timeline-header">
+                  <h3>Дизель</h3>
+                  <div class="state-legend">
+                    <span class="pill pill-yes">✓ есть</span>
+                    <span class="pill pill-no">✗ нет</span>
+                    <span class="pill pill-off">⊘ не работает</span>
+                  </div>
+                </div>
+                <div id="fuelChartDiesel" class="chart chart-compact"></div>
+              </div>
             </div>
-            <div id="fuelChart95" class="chart chart-compact"></div>
-          </div>
-          <div class="fuel-chart-block" data-fuel-key="fuel_diesel">
-            <h3>Дизель</h3>
-            <div class="state-legend">
-              <span class="pill pill-yes">✓ есть</span>
-              <span class="pill pill-no">✗ нет</span>
-              <span class="pill pill-off">⊘ не работает</span>
-              <span class="pill chip-muted">метки при смене</span>
-            </div>
-            <div id="fuelChartDiesel" class="chart chart-compact"></div>
           </div>
         </div>
-      </div>
-    </section>
+      </article>
 
-    <section class="card">
-      <div class="card-head">
-        <h2>Очереди по АЗС</h2>
-        <p class="card-desc">Метки: · нет · 30 · 60 · 60+</p>
-      </div>
-      <div class="chart-panel">
-        <div class="chart-legend">
-          <div class="legend-toolbar">
-            <button type="button" class="secondary" id="queueHideAll">Снять все</button>
-            <button type="button" class="secondary" id="queueShowAll">Показать все</button>
-          </div>
-          <div class="legend-list" id="queueLegend"></div>
+      <section class="panel queue-panel">
+        <div class="card-head">
+          <h2 class="panel-title">Очереди по АЗС</h2>
+          <p class="card-desc">Метки: · нет · 30 · 60 · 60+</p>
         </div>
-        <div id="queueChart" class="chart chart-compact"></div>
-      </div>
-    </section>
+        <div class="availability-layout">
+          <aside class="station-list">
+            <div class="legend-toolbar">
+              <button type="button" class="button-text" id="queueHideAll">Снять все</button>
+              <button type="button" class="button-text" id="queueShowAll">Показать все</button>
+            </div>
+            <div class="legend-list" id="queueLegend"></div>
+          </aside>
+          <div class="timeline-area">
+            <div id="queueChart" class="chart chart-compact"></div>
+          </div>
+        </div>
+      </section>
 
-    <section class="card">
-      <h2>Доля АЗС с топливом</h2>
-      <div id="summaryChart" class="chart"></div>
-    </section>
-
-    <section class="card">
-      <h2>Когда появилось топливо</h2>
-      <div class="table-wrap" id="fuelSinceTable"></div>
-    </section>
-
-    <section class="card">
-      <h2>Последнее состояние</h2>
-      <div class="table-wrap" id="latestTable"></div>
-    </section>
+      <section class="panel table-panel">
+        <div class="table-panel__header">
+          <h2 class="panel-title">Последнее состояние</h2>
+        </div>
+        <div class="table-scroll" id="latestTable"></div>
+      </section>
+    </div>
 
     <footer class="site-footer">
       Powered by <a href="https://positroid.tech" target="_blank" rel="noopener noreferrer">positroid</a>
@@ -815,9 +1033,31 @@
     const QUEUE_LANE_OFFSET = { 0: -0.33, 1: -0.11, 2: 0.11, 3: 0.33 };
     const QUEUE_POINT_LABEL = { 0: "·", 1: "30", 2: "60", 3: "60+" };
     const CHART_COLORS = [
-      "#5470c6", "#91cc75", "#fac858", "#ee6666", "#73c0de",
-      "#3ba272", "#fc8452", "#9a60b4", "#ea7ccc", "#6e7074",
+      "#4788ff", "#9d5af5", "#40c86f", "#ff514d", "#39bedc",
+      "#f7ad32", "#24c7c8", "#a759f5", "#62e09a", "#68778e",
     ];
+    const CHART_THEME = {
+      text: "#748399",
+      axisLine: "#213049",
+      splitH: "rgba(113, 137, 171, 0.13)",
+      splitV: "rgba(113, 137, 171, 0.07)",
+      tooltipBg: "rgba(12, 21, 36, 0.96)",
+      tooltipBorder: "#213049",
+      tooltipText: "#e8edf5",
+      offline: "#68778e",
+      emptyText: "#68778e",
+    };
+    const FUEL_COLORS = {
+      fuel_92: "#4788ff",
+      fuel_95: "#40d38a",
+      fuel_diesel: "#a759f5",
+    };
+    const SUMMARY_COLORS = {
+      "АИ-92": FUEL_COLORS.fuel_92,
+      "АИ-95": FUEL_COLORS.fuel_95,
+      "Дизель": FUEL_COLORS.fuel_diesel,
+      "Работают": "#ff514d",
+    };
 
     const fuelChart92 = echarts.init(document.getElementById("fuelChart92"));
     const fuelChart95 = echarts.init(document.getElementById("fuelChart95"));
@@ -964,9 +1204,36 @@
     }
 
     function badge(value) {
-      if (value === "yes") return '<span class="badge yes">Да</span>';
-      if (value === "no") return '<span class="badge no">Нет</span>';
-      return '<span class="badge unknown">—</span>';
+      if (value === "yes") return '<span class="status-positive">Да</span>';
+      if (value === "no") return '<span class="status-negative">Нет</span>';
+      return '<span class="status-unknown">—</span>';
+    }
+
+    function stationCell(brand, address) {
+      return `<div class="station-cell__brand">${brand}</div><div class="station-cell__address">${address}</div>`;
+    }
+
+    function formatAxisDateTime(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${pad(d.getDate())}.${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function chartTooltipStyle() {
+      return {
+        backgroundColor: CHART_THEME.tooltipBg,
+        borderColor: CHART_THEME.tooltipBorder,
+        textStyle: { color: CHART_THEME.tooltipText, fontSize: 12 },
+      };
+    }
+
+    function chartAxisStyle() {
+      return {
+        axisLine: { lineStyle: { color: CHART_THEME.axisLine } },
+        axisLabel: { color: CHART_THEME.text, fontSize: 10 },
+        splitLine: { lineStyle: { color: CHART_THEME.splitH, type: "dashed" } },
+      };
     }
 
     function queueLabel(value) {
@@ -1129,53 +1396,39 @@
       document.getElementById("filterNote").innerHTML = chips.join("");
     }
 
-    function fuelPct(value, total) {
-      if (!total) return null;
-      return Math.round((value / total) * 100);
-    }
-
-    function renderStats(latest, summary) {
+    function renderStats() {
       const stats = document.getElementById("stats");
-      if (!latest) {
-        stats.innerHTML = '<div class="stats-meta"><div class="stat-meta-item"><div class="value">—</div><div class="label">Нет данных</div></div></div>';
+      const latest = cache.latest;
+      if (!latest || !latest.stations?.length) {
+        stats.innerHTML = '<div class="stats-bar__inner stats-bar__inner--empty">Ожидание данных</div>';
         return;
       }
-      const last = summary.length ? summary[summary.length - 1] : null;
-      const total = last ? last.total : 0;
+
+      const stations = latest.stations;
+      const total = latest.station_count || stations.length;
+      const countYes = (key) => stations.filter((s) => s[key] === "yes").length;
+      const pct = (value) => (total ? Math.round((value / total) * 100) : 0);
       const fuels = [
-        { cls: "fuel-92", name: "АИ-92", pct: last ? fuelPct(last.fuel_92_yes, total) : null, count: last?.fuel_92_yes },
-        { cls: "fuel-95", name: "АИ-95", pct: last ? fuelPct(last.fuel_95_yes, total) : null, count: last?.fuel_95_yes },
-        { cls: "fuel-diesel", name: "Дизель", pct: last ? fuelPct(last.fuel_diesel_yes, total) : null, count: last?.fuel_diesel_yes },
+        { key: "fuel_92", label: "АИ-92", cls: "stats-bar__fuel--92" },
+        { key: "fuel_95", label: "АИ-95", cls: "stats-bar__fuel--95" },
+        { key: "fuel_diesel", label: "Дизель", cls: "stats-bar__fuel--diesel" },
       ];
 
       stats.innerHTML = `
-        <div class="stats-meta">
-          <div class="stat-meta-item">
-            <div class="value">${meta.snapshot_count || 0}</div>
-            <div class="label">Снимков</div>
-          </div>
-          <div class="stat-meta-item">
-            <div class="value">${total || "—"}</div>
-            <div class="label">АЗС в периоде</div>
-          </div>
-          <div class="stat-meta-item">
-            <div class="value small">${formatDateTime(latest.collected_at)}</div>
-            <div class="label">Последний сбор</div>
-          </div>
-        </div>
-        <div class="stats-fuel">
-          ${fuels.map((fuel) => `
-            <div class="stat-fuel ${fuel.cls}">
-              <div class="stat-fuel-head">
-                <span class="stat-fuel-name">${fuel.name}</span>
-                <span class="stat-fuel-pct">${fuel.pct ?? "—"}${fuel.pct !== null ? "%" : ""}</span>
-              </div>
-              <div class="stat-bar">
-                <div class="stat-bar-fill" style="width:${fuel.pct ?? 0}%"></div>
-              </div>
-              <div class="stat-fuel-foot">${fuel.count ?? "—"} из ${total || "—"} АЗС</div>
-            </div>
-          `).join("")}
+        <div class="stats-bar__inner">
+          <span class="stats-bar__updated">Обновлено <time datetime="${latest.collected_at}">${formatDateTime(latest.collected_at)}</time></span>
+          ${fuels.map((fuel) => {
+            const yes = countYes(fuel.key);
+            return `
+              <span class="stats-bar__sep" aria-hidden="true"></span>
+              <span class="stats-bar__metric">
+                <span class="stats-bar__fuel ${fuel.cls}">${fuel.label}</span>
+                <strong class="stats-bar__pct">${pct(yes)}%</strong>
+                <span class="stats-bar__count">${yes}/${total}</span>
+              </span>
+            `;
+          }).join("")}
+          <span class="stats-bar__meta">${total} АЗС</span>
         </div>
       `;
     }
@@ -1217,7 +1470,7 @@
       const sorted = sortRows(rows, fuelSinceSort.column, fuelSinceSort.dir);
       const body = sorted.map((row) => `
         <tr>
-          <td><strong>${row.brand}</strong><br>${row.address}</td>
+          <td>${stationCell(row.brand, row.address)}</td>
           <td>${formatDateTime(row.fuel_92_since)}</td>
           <td>${formatDateTime(row.fuel_95_since)}</td>
           <td>${formatDateTime(row.fuel_diesel_since)}</td>
@@ -1229,7 +1482,7 @@
       `).join("");
 
       container.innerHTML = `
-        <table>
+        <table class="data-table">
           <thead>
             <tr>
               ${sortHeader("АЗС", "station")}
@@ -1267,7 +1520,7 @@
       }
       const rows = latest.stations.map((s) => `
         <tr>
-          <td><strong>${s.brand}</strong><br>${s.address}</td>
+          <td>${stationCell(s.brand, s.address)}</td>
           <td>${badge(s.is_working)}</td>
           <td>${badge(s.fuel_92)}</td>
           <td>${badge(s.fuel_95)}</td>
@@ -1277,7 +1530,7 @@
         </tr>
       `).join("");
       container.innerHTML = `
-        <table>
+        <table class="data-table">
           <thead>
             <tr>
               <th>АЗС</th><th>Работает</th><th>92</th><th>95</th><th>Дизель</th><th>Очередь</th><th>Последний отчёт</th>
@@ -1318,7 +1571,10 @@
           <label class="legend-item${checked ? "" : " off"}">
             <input type="checkbox" data-station-id="${station.station_id}" ${checked ? "checked" : ""}>
             <span class="legend-dot" style="background:${color}"></span>
-            <span class="legend-label"><strong>${station.brand}</strong><br>${station.address}</span>
+            <span class="legend-label">
+              <div class="station-row__brand">${station.brand}</div>
+              <div class="station-row__address">${station.address}</div>
+            </span>
           </label>`;
       }).join("");
 
@@ -1388,18 +1644,21 @@
     }
 
     function fuelChangeColor(status) {
-      if (status === 1) return "#16a34a";
-      if (status === 0) return "#dc2626";
-      return "#6b7280";
+      if (status === 1) return "#40d38a";
+      if (status === 0) return "#ff625f";
+      return "#68778e";
     }
 
     function buildSwimlaneYAxis(laneLabels) {
       return {
         type: "value",
-        min: 0,
-        max: laneLabels.length,
+        min: -1.2,
+        max: laneLabels.length + 0.35,
         interval: 0.5,
+        axisLine: { lineStyle: { color: CHART_THEME.axisLine } },
         axisLabel: {
+          color: CHART_THEME.text,
+          fontSize: 10,
           formatter(v) {
             if (Math.abs(v - Math.round(v)) < 0.01) return "";
             const idx = Math.floor(v);
@@ -1416,13 +1675,23 @@
         splitLine: {
           show: true,
           interval: 1,
-          lineStyle: { type: "dashed", color: "#e8ebf0" },
+          lineStyle: { type: "dashed", color: CHART_THEME.splitH },
         },
       };
     }
 
+    function swimlaneGrid() {
+      return { left: 108, right: 16, top: 32, bottom: 36 };
+    }
+
+    function laneLabelPosition(y, laneIndex = null) {
+      if (laneIndex === 0) return "bottom";
+      const center = Math.round(y - 0.5) + 0.5;
+      return y >= center ? "bottom" : "top";
+    }
+
     function fuelChartHeight(stationCount) {
-      return Math.min(900, Math.max(280, stationCount * 36 + 56));
+      return Math.min(600, Math.max(200, stationCount * 28 + 52));
     }
 
     function chartTimeBounds(timeseries) {
@@ -1440,16 +1709,16 @@
       if (!total) return "Ожидание первого сбора данных";
       const from = document.getElementById("from").value;
       const to = document.getElementById("to").value;
-      let text = `${total} снимков в базе`;
       if (from || to) {
         const parts = [];
-        if (from) parts.push(`с ${formatDateTime(from)}`);
-        if (to) parts.push(`по ${formatDateTime(to)}`);
-        text += ` · фильтр ${parts.join(" ")}`;
-      } else if (meta.from) {
-        text += ` · ${formatDateTime(meta.from)} — ${formatDateTime(meta.to)}`;
+        if (from) parts.push(formatDateTime(from));
+        if (to) parts.push(formatDateTime(to));
+        return `Данные с ${parts.join(" по ")}`;
       }
-      return text;
+      if (meta.from) {
+        return `Данные с ${formatDateTime(meta.from)} по ${formatDateTime(meta.to)}`;
+      }
+      return `${total} снимков в базе`;
     }
 
     function buildFuelSeriesForStation(timeseries, stationId, fuelKey) {
@@ -1457,6 +1726,22 @@
         .filter((row) => row.station_id === stationId)
         .map((row) => [row.collected_at, fuelChartStatus(row, fuelKey)])
         .filter(([, val]) => val !== null);
+    }
+
+    function buildTimeXAxis(timeBounds) {
+      const base = timeBounds
+        ? { type: "time", min: timeBounds.min, max: timeBounds.max }
+        : { type: "time" };
+      return {
+        ...base,
+        axisLine: { lineStyle: { color: CHART_THEME.axisLine } },
+        axisLabel: {
+          color: CHART_THEME.text,
+          fontSize: 10,
+          formatter: (value) => formatAxisDateTime(value),
+        },
+        splitLine: { show: true, lineStyle: { color: CHART_THEME.splitV, type: "dashed" } },
+      };
     }
 
     function renderSingleFuelChart(chart, timeseries, fuelKey, stations) {
@@ -1471,8 +1756,9 @@
             text: "Нет АЗС по фильтру",
             left: "center",
             top: "center",
-            textStyle: { color: "#667085", fontSize: 14, fontWeight: 400 },
+            textStyle: { color: CHART_THEME.emptyText, fontSize: 13, fontWeight: 400 },
           },
+          backgroundColor: "transparent",
           xAxis: { show: false },
           yAxis: { show: false },
           series: [],
@@ -1491,25 +1777,27 @@
           const isChange = idx > 0 && status !== rawPoints[idx - 1][1];
           const showMark = isChange || sparse;
           const isOffline = status === 2;
+          const y = laneY(laneIndex, status);
           return {
-            value: [ts, laneY(laneIndex, status)],
+            value: [ts, y],
             symbol: showMark ? "circle" : "none",
-            symbolSize: showMark ? 8 : 0,
+            symbolSize: showMark ? 5 : 0,
             label: {
               show: showMark,
               formatter: fuelChangeLabel(status),
-              fontSize: 12,
+              fontSize: 10,
               fontWeight: 700,
               color: fuelChangeColor(status),
-              position: "top",
-              distance: status === 1 ? 4 : 10,
+              position: laneLabelPosition(y, laneIndex),
+              distance: 4,
+              overflow: "none",
             },
             lineStyle: isOffline
-              ? { type: "dashed", color: "#9ca3af", opacity: 0.75, width: 2 }
+              ? { type: "dashed", color: CHART_THEME.offline, opacity: 0.6, width: 1.5 }
               : undefined,
             itemStyle: isOffline
-              ? { color: "#9ca3af", borderColor: "#fff", borderWidth: 1 }
-              : { color, borderColor: "#fff", borderWidth: 1 },
+              ? { color: CHART_THEME.offline, borderColor: "var(--surface-1)", borderWidth: 1 }
+              : { color, borderColor: "var(--surface-1)", borderWidth: 1 },
           };
         });
 
@@ -1520,9 +1808,11 @@
           connectNulls: false,
           showSymbol: true,
           color,
-          lineStyle: { width: 2, color, opacity: 0.85 },
-          itemStyle: { color, borderColor: "#fff", borderWidth: 1 },
+          lineStyle: { width: 1.5, color, opacity: 0.9 },
+          itemStyle: { color, borderColor: "var(--surface-1)", borderWidth: 1 },
           emphasis: { focus: "series" },
+          clip: false,
+          labelLayout: { hideOverlap: true },
           data,
         };
       });
@@ -1530,9 +1820,12 @@
       const timeBounds = chartTimeBounds(timeseries);
       chart.setOption({
         title: { show: false },
+        backgroundColor: "transparent",
+        labelLayout: { hideOverlap: true },
         tooltip: {
           trigger: "axis",
-          axisPointer: { type: "line" },
+          axisPointer: { type: "line", lineStyle: { color: CHART_THEME.splitH } },
+          ...chartTooltipStyle(),
           formatter(params) {
             if (!params.length) return "";
             const time = formatDateTime(params[0].value[0]);
@@ -1545,10 +1838,8 @@
           },
         },
         legend: { show: false },
-        grid: { left: 128, right: 20, top: 16, bottom: 48 },
-        xAxis: timeBounds
-          ? { type: "time", min: timeBounds.min, max: timeBounds.max }
-          : { type: "time" },
+        grid: swimlaneGrid(),
+        xAxis: buildTimeXAxis(timeBounds),
         yAxis: buildSwimlaneYAxis(laneLabels),
         series,
       }, true);
@@ -1618,8 +1909,9 @@
             text: "Нет АЗС по фильтру",
             left: "center",
             top: "center",
-            textStyle: { color: "#667085", fontSize: 14, fontWeight: 400 },
+            textStyle: { color: CHART_THEME.emptyText, fontSize: 13, fontWeight: 400 },
           },
+          backgroundColor: "transparent",
           xAxis: { show: false },
           yAxis: { show: false },
           series: [],
@@ -1629,8 +1921,25 @@
       }
 
       const series = visibleStations.map((station, laneIndex) => {
-        const points = buildQueueSeriesForStation(timeseries, station.station_id)
-          .map(([ts, val]) => [ts, queueLaneY(laneIndex, val)]);
+        const rawPoints = buildQueueSeriesForStation(timeseries, station.station_id);
+        const points = rawPoints.map(([ts, val], idx) => {
+          const y = queueLaneY(laneIndex, val);
+          const prevVal = idx > 0 ? rawPoints[idx - 1][1] : null;
+          const showLabel = idx === 0 || val !== prevVal;
+          return {
+            value: [ts, y],
+            label: {
+              show: showLabel,
+              formatter: QUEUE_POINT_LABEL[val] ?? "",
+              fontSize: 10,
+              fontWeight: 700,
+              color: CHART_THEME.text,
+              position: laneLabelPosition(y, laneIndex),
+              distance: 4,
+              overflow: "none",
+            },
+          };
+        });
 
         const color = CHART_COLORS[laneIndex % CHART_COLORS.length];
         return {
@@ -1640,31 +1949,24 @@
           connectNulls: false,
           showSymbol: true,
           symbol: "circle",
-          symbolSize: 8,
+          symbolSize: 4,
           color,
-          lineStyle: { width: 2, color, opacity: 0.85 },
-          itemStyle: { color, borderColor: "#fff", borderWidth: 1 },
+          lineStyle: { width: 1.5, color, opacity: 0.9 },
+          itemStyle: { color, borderColor: "var(--surface-1)", borderWidth: 1 },
           emphasis: { focus: "series" },
-          label: {
-            show: true,
-            formatter(params) {
-              const level = queueFromLaneY(params.value[1]);
-              return QUEUE_POINT_LABEL[level] ?? "";
-            },
-            fontSize: 11,
-            fontWeight: 700,
-            color: "#374151",
-            distance: 6,
-          },
+          clip: false,
+          labelLayout: { hideOverlap: true },
           data: points,
         };
       });
 
       const timeBounds = chartTimeBounds(timeseries);
       queueChart.setOption({
+        backgroundColor: "transparent",
         tooltip: {
           trigger: "axis",
-          axisPointer: { type: "line" },
+          axisPointer: { type: "line", lineStyle: { color: CHART_THEME.splitH } },
+          ...chartTooltipStyle(),
           formatter(params) {
             if (!params.length) return "";
             const time = formatDateTime(params[0].value[0]);
@@ -1677,53 +1979,101 @@
           },
         },
         legend: { show: false },
-        grid: { left: 128, right: 20, top: 16, bottom: 48 },
-        xAxis: timeBounds
-          ? { type: "time", min: timeBounds.min, max: timeBounds.max }
-          : { type: "time" },
+        grid: { left: 108, right: 16, top: 36, bottom: 36 },
+        xAxis: buildTimeXAxis(timeBounds),
         yAxis: buildSwimlaneYAxis(laneLabels),
         series,
       }, true);
       queueChart.resize();
     }
 
+    function summaryPct(row, field) {
+      if (!row.total) return null;
+      return Math.round((row[field] / row.total) * 100);
+    }
+
     function renderSummaryChart(summary) {
+      summaryChart.getDom().style.height = "300px";
+
+      if (!summary.length) {
+        summaryChart.setOption({
+          title: {
+            text: "Нет данных",
+            left: "center",
+            top: "center",
+            textStyle: { color: CHART_THEME.emptyText, fontSize: 13, fontWeight: 400 },
+          },
+          backgroundColor: "transparent",
+          xAxis: { show: false },
+          yAxis: { show: false },
+          series: [],
+        }, true);
+        summaryChart.resize();
+        return;
+      }
+
+      const dense = summary.length > 36;
+      const timeBounds = chartTimeBounds(summary);
+      const seriesDefs = [
+        { name: "АИ-92", field: "fuel_92_yes", color: SUMMARY_COLORS["АИ-92"] },
+        { name: "АИ-95", field: "fuel_95_yes", color: SUMMARY_COLORS["АИ-95"] },
+        { name: "Дизель", field: "fuel_diesel_yes", color: SUMMARY_COLORS["Дизель"] },
+        { name: "Работают", field: "working_yes", color: SUMMARY_COLORS["Работают"] },
+      ];
+
       summaryChart.setOption({
-        tooltip: { trigger: "axis" },
-        legend: { data: ["АИ-92", "АИ-95", "Дизель", "Работают"] },
-        xAxis: {
-          type: "category",
-          data: summary.map((row) => formatDateTime(row.collected_at)),
+        backgroundColor: "transparent",
+        tooltip: {
+          trigger: "axis",
+          axisPointer: { type: "line", lineStyle: { color: CHART_THEME.splitH } },
+          ...chartTooltipStyle(),
+          formatter(params) {
+            if (!params.length) return "";
+            const time = formatDateTime(params[0].value[0]);
+            const lines = [`<strong>${time}</strong>`];
+            for (const item of params) {
+              const val = item.value[1];
+              lines.push(`${item.marker} ${item.seriesName}: <strong>${val ?? "—"}%</strong>`);
+            }
+            return lines.join("<br>");
+          },
         },
+        legend: {
+          data: seriesDefs.map((s) => s.name),
+          textStyle: { color: CHART_THEME.text, fontSize: 11 },
+          itemWidth: 14,
+          itemHeight: 3,
+          top: 2,
+          right: 0,
+          icon: "roundRect",
+        },
+        grid: { left: 42, right: 10, top: 28, bottom: 26 },
+        xAxis: buildTimeXAxis(timeBounds),
         yAxis: {
           type: "value",
           min: 0,
           max: 100,
-          axisLabel: { formatter: "{value}%" },
+          axisLine: { show: false },
+          axisLabel: { color: CHART_THEME.text, fontSize: 10, formatter: "{value}%" },
+          splitLine: { lineStyle: { color: CHART_THEME.splitH, type: "dashed" } },
         },
-        series: [
-          {
-            name: "АИ-92",
-            type: "line",
-            data: summary.map((row) => Math.round((row.fuel_92_yes / row.total) * 100)),
-          },
-          {
-            name: "АИ-95",
-            type: "line",
-            data: summary.map((row) => Math.round((row.fuel_95_yes / row.total) * 100)),
-          },
-          {
-            name: "Дизель",
-            type: "line",
-            data: summary.map((row) => Math.round((row.fuel_diesel_yes / row.total) * 100)),
-          },
-          {
-            name: "Работают",
-            type: "line",
-            data: summary.map((row) => Math.round((row.working_yes / row.total) * 100)),
-          },
-        ],
+        series: seriesDefs.map(({ name, field, color }) => ({
+          name,
+          type: "line",
+          connectNulls: true,
+          showSymbol: !dense,
+          symbol: "circle",
+          symbolSize: dense ? 0 : 5,
+          sampling: dense ? "lttb" : false,
+          smooth: false,
+          color,
+          lineStyle: { width: 2, color },
+          itemStyle: { color, borderColor: "#0c1422", borderWidth: 1 },
+          emphasis: { focus: "series" },
+          data: summary.map((row) => [row.collected_at, summaryPct(row, field)]),
+        })),
       }, true);
+      summaryChart.resize();
     }
 
     function renderAll() {
@@ -1741,7 +2091,7 @@
         : null;
 
       renderFilterNote(activeIds.size);
-      renderStats(latest, globalSummary);
+      renderStats();
       renderFuelSinceTable(fuelSince);
       renderLatestTable(latest);
       renderFuelCharts(timeseries);
@@ -1749,6 +2099,23 @@
       renderSummaryChart(globalSummary);
       bindLegendBulkActions("fuelHideAll", "fuelShowAll", stationsFromTimeseries(timeseries), fuelHiddenStations);
       bindLegendBulkActions("queueHideAll", "queueShowAll", stationsFromTimeseries(timeseries), queueHiddenStations);
+    }
+
+    function resizeAllCharts() {
+      fuelChart92.resize();
+      fuelChart95.resize();
+      fuelChartDiesel.resize();
+      queueChart.resize();
+      summaryChart.resize();
+    }
+
+    function setFiltersExpanded(expanded) {
+      const panel = document.getElementById("filtersPanel");
+      const toggle = document.getElementById("filtersToggle");
+      panel.classList.toggle("filters-panel--collapsed", !expanded);
+      toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+      toggle.querySelector(".filters-toggle__icon").textContent = expanded ? "▾" : "▸";
+      requestAnimationFrame(resizeAllCharts);
     }
 
     async function loadData() {
@@ -1807,6 +2174,10 @@
       applyFiltersFromUrl();
       setDefaultDateRange();
 
+      document.getElementById("filtersToggle").addEventListener("click", () => {
+        setFiltersExpanded(document.getElementById("filtersPanel").classList.contains("filters-panel--collapsed"));
+      });
+
       document.getElementById("apply").addEventListener("click", async () => {
         syncFiltersToUrl();
         await loadData();
@@ -1834,13 +2205,7 @@
       document.getElementById("from").addEventListener("change", () => updatePresetButtons(null));
       document.getElementById("to").addEventListener("change", () => updatePresetButtons(null));
 
-      window.addEventListener("resize", () => {
-        fuelChart92.resize();
-        fuelChart95.resize();
-        fuelChartDiesel.resize();
-        queueChart.resize();
-        summaryChart.resize();
-      });
+      window.addEventListener("resize", resizeAllCharts);
 
       await loadData();
       setInterval(loadData, 60000);
@@ -1850,5 +2215,19 @@
       document.getElementById("subtitle").textContent = `Ошибка загрузки: ${error.message}`;
     });
   </script>
+
+  <!-- Yandex.Metrika counter -->
+  <script type="text/javascript">
+    (function(m,e,t,r,i,k,a){
+      m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+      m[i].l=1*new Date();
+      for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+      k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+    })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=110621011', 'ym');
+
+    ym(110621011, 'init', {ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", referrer: document.referrer, url: location.href, accurateTrackBounce:true, trackLinks:true});
+  </script>
+  <noscript><div><img src="https://mc.yandex.ru/watch/110621011" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+  <!-- /Yandex.Metrika counter -->
 </body>
 </html>

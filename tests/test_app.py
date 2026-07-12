@@ -69,7 +69,13 @@ def test_skip_unchanged_snapshot_index(tmp_path):
     storage.save_snapshot(stations, "https://example.test", second_at)
 
     meta = storage.get_meta()
-    assert meta["snapshot_count"] == 1
+    assert meta["snapshot_count"] == 2
+    assert meta["to"] == second_at.isoformat()
+
+    latest = storage.get_latest()
+    assert latest is not None
+    assert latest["collected_at"] == second_at.isoformat()
+    assert latest["station_count"] == 24
 
 
 def test_save_snapshot_and_index(tmp_path):

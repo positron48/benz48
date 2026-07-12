@@ -69,6 +69,11 @@ def fuel_since(
     return storage.query_fuel_since(date_from, date_to, station_ids, brands)
 
 
+@app.get("/favicon.ico")
+def favicon() -> FileResponse:
+    return FileResponse(static_dir / "favicon.svg", media_type="image/svg+xml")
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(
