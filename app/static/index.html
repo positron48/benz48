@@ -1,0 +1,1634 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Мониторинг топлива — Липецкая область</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef1f6;
+      --bg-accent: linear-gradient(135deg, #ecfdf3 0%, #eef1f6 45%, #f8fafc 100%);
+      --card: #fff;
+      --line: #e2e8f0;
+      --line-strong: #cbd5e1;
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #15803d;
+      --accent-dark: #166534;
+      --accent-soft: #dcfce7;
+      --accent-glow: rgba(21, 128, 61, 0.12);
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+      --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.06);
+      --radius: 14px;
+      --radius-sm: 10px;
+      --fuel-92: #2563eb;
+      --fuel-95: #7c3aed;
+      --fuel-diesel: #0d9488;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg-accent);
+      background-attachment: fixed;
+      color: var(--text);
+      line-height: 1.45;
+    }
+    main {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px 20px 40px;
+    }
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .eyebrow {
+      margin: 0 0 6px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 4vw, 34px);
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+    h2 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: -0.01em;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin: 8px 0 0;
+      font-size: 14px;
+    }
+    .live-badge {
+      flex-shrink: 0;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow-sm);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .live-badge::before {
+      content: "";
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 6px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+      vertical-align: 1px;
+    }
+    .panel, .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-md);
+      margin-bottom: 18px;
+    }
+    .panel { padding: 18px; }
+    .card { padding: 18px 18px 16px; }
+    .card-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .card-head .card-desc {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .filters-panel { display: flex; flex-direction: column; gap: 16px; }
+    .panel-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .search-block { flex: 1; min-width: 260px; }
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    input, select, button {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 0 12px;
+      font: inherit;
+      background: #fff;
+      color: var(--text);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #86efac;
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    input[type="search"] {
+      min-height: 44px;
+      padding-left: 14px;
+      font-size: 15px;
+      border-color: var(--line-strong);
+      background: #f8fafc;
+    }
+    select[multiple] {
+      min-height: 132px;
+      padding: 8px;
+      font-size: 13px;
+      background: #fafbfc;
+    }
+    select[multiple] option {
+      padding: 6px 8px;
+      border-radius: 6px;
+      margin-bottom: 2px;
+    }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+    button.secondary {
+      background: #fff;
+      color: var(--text);
+      border-color: var(--line-strong);
+    }
+    button.secondary:hover { background: #f8fafc; }
+    .chip-btn {
+      width: auto;
+      min-height: 32px;
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: var(--muted);
+      border: 1px solid transparent;
+    }
+    .chip-btn:hover { background: #e2e8f0; color: var(--text); }
+    .chip-btn.active {
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+      border-color: #bbf7d0;
+    }
+    .filters-grid {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.05fr) repeat(4, minmax(150px, 1fr));
+      gap: 14px;
+      align-items: start;
+    }
+    .filter-group {
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      min-width: 0;
+    }
+    .group-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .date-row {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      align-items: end;
+    }
+    .date-sep {
+      color: var(--muted);
+      font-weight: 700;
+      padding-bottom: 10px;
+    }
+    .preset-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .filter-hint {
+      margin-top: 8px;
+      font-size: 11px;
+      line-height: 1.35;
+      color: var(--muted);
+    }
+    .filters-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+    .filters-actions button { width: auto; min-width: 120px; }
+    .filter-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: #f1f5f9;
+      border: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .chip-muted { color: var(--muted); font-weight: 500; }
+    .stats-wrap {
+      display: grid;
+      grid-template-columns: minmax(280px, 0.9fr) minmax(420px, 1.4fr);
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .stats-meta, .stats-fuel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-md);
+      padding: 14px;
+    }
+    .stats-meta {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .stat-meta-item {
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(180deg, #fafbfc 0%, #f8fafc 100%);
+      border: 1px solid var(--line);
+      min-width: 0;
+    }
+    .stat-meta-item .value {
+      font-size: clamp(18px, 2.2vw, 24px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      word-break: break-word;
+    }
+    .stat-meta-item .value.small { font-size: 13px; font-weight: 700; line-height: 1.35; }
+    .stat-meta-item .label {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .stats-fuel {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .stat-fuel {
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .stat-fuel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .stat-fuel-name {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+    }
+    .stat-fuel-pct {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+    .stat-fuel.fuel-92 .stat-fuel-name, .stat-fuel.fuel-92 .stat-fuel-pct { color: var(--fuel-92); }
+    .stat-fuel.fuel-95 .stat-fuel-name, .stat-fuel.fuel-95 .stat-fuel-pct { color: var(--fuel-95); }
+    .stat-fuel.fuel-diesel .stat-fuel-name, .stat-fuel.fuel-diesel .stat-fuel-pct { color: var(--fuel-diesel); }
+    .stat-bar {
+      height: 8px;
+      border-radius: 999px;
+      background: #eef2f7;
+      overflow: hidden;
+    }
+    .stat-bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      transition: width 0.35s ease;
+    }
+    .stat-fuel.fuel-92 .stat-bar-fill { background: linear-gradient(90deg, #60a5fa, var(--fuel-92)); }
+    .stat-fuel.fuel-95 .stat-bar-fill { background: linear-gradient(90deg, #a78bfa, var(--fuel-95)); }
+    .stat-fuel.fuel-diesel .stat-bar-fill { background: linear-gradient(90deg, #2dd4bf, var(--fuel-diesel)); }
+    .stat-fuel-foot {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .state-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      border: 1px solid transparent;
+    }
+    .pill-yes { background: #ecfdf3; color: #166534; border-color: #bbf7d0; }
+    .pill-no { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+    .pill-off { background: #f8fafc; color: #475569; border-color: #e2e8f0; }
+    .chart { width: 100%; height: 360px; min-width: 0; }
+    .chart-compact { min-height: 280px; height: auto; }
+    .fuel-charts-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-width: 0;
+    }
+    .fuel-chart-block {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: linear-gradient(180deg, #fff 0%, #fafbfc 100%);
+    }
+    .fuel-chart-block h3 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .chart-panel {
+      display: grid;
+      grid-template-columns: minmax(240px, 280px) 1fr;
+      gap: 14px;
+      align-items: stretch;
+    }
+    .chart-legend {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      position: sticky;
+      top: 20px;
+      align-self: start;
+      overflow: hidden;
+    }
+    .legend-toolbar {
+      display: flex;
+      gap: 6px;
+      padding: 8px;
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+      background: #fff;
+    }
+    .legend-toolbar button {
+      min-height: 30px;
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .legend-list {
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+      max-height: 760px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 12px;
+      line-height: 1.35;
+      cursor: pointer;
+      word-break: break-word;
+      padding: 6px 8px;
+      border-radius: 8px;
+      transition: background 0.12s;
+    }
+    .legend-item:hover { background: #eef2f7; }
+    .legend-item input { width: auto; min-height: auto; margin-top: 2px; flex-shrink: 0; }
+    .legend-item.off { opacity: 0.45; }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-top: 3px;
+      flex-shrink: 0;
+    }
+    .legend-label { flex: 1; min-width: 0; }
+    @media (max-width: 1100px) {
+      .filters-grid { grid-template-columns: 1fr 1fr; }
+      .filter-group:first-child { grid-column: 1 / -1; }
+      .stats-wrap { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 900px) {
+      .chart-panel { grid-template-columns: 1fr; }
+      .chart-legend { max-height: 220px; min-height: 220px; position: static; }
+      .stats-meta, .stats-fuel { grid-template-columns: 1fr; }
+      .filters-grid { grid-template-columns: 1fr; }
+      .filters-actions { justify-content: stretch; }
+      .filters-actions button { flex: 1; }
+      .page-header { flex-direction: column; }
+    }
+    .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      background: #fff;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+      user-select: none;
+      background: #f8fafc;
+    }
+    th.sortable { cursor: pointer; }
+    th.sortable:hover { color: var(--text); }
+    th .sort-mark { opacity: 0.35; margin-left: 4px; }
+    th.sorted .sort-mark { opacity: 1; color: var(--accent); }
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge.yes { background: var(--accent-soft); color: var(--accent-dark); }
+    .badge.no { background: #fee2e2; color: #991b1b; }
+    .badge.unknown { background: #f1f5f9; color: #64748b; }
+    .empty { color: var(--muted); padding: 28px; text-align: center; }
+    .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .site-footer {
+      margin-top: 8px;
+      padding: 16px 4px 8px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .site-footer a {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 600;
+      border-bottom: 1px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .site-footer a:hover {
+      color: var(--accent);
+      border-bottom-color: #bbf7d0;
+    }
+    .site-footer-sep { margin: 0 10px; opacity: 0.35; }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Липецкая область · мониторинг АЗС</p>
+        <h1>Мониторинг топлива</h1>
+        <p class="subtitle" id="subtitle">Загрузка данных...</p>
+      </div>
+      <div class="live-badge">обновление каждые 5 мин</div>
+    </header>
+
+    <section class="panel filters-panel">
+      <div class="panel-top">
+        <h2>Фильтры</h2>
+        <div class="filter-chips" id="filterNote"></div>
+      </div>
+
+      <div class="search-block">
+        <label for="search">Быстрый поиск</label>
+        <input type="search" id="search" placeholder="Название, адрес, бренд — графики обновляются сразу">
+        <div class="hint">Фильтрует все графики и таблицы мгновенно</div>
+      </div>
+
+      <div class="filters-grid">
+        <div class="filter-group">
+          <span class="group-label">Период</span>
+          <div class="date-row">
+            <div>
+              <label for="from">С</label>
+              <input type="datetime-local" id="from">
+            </div>
+            <span class="date-sep">—</span>
+            <div>
+              <label for="to">По</label>
+              <input type="datetime-local" id="to">
+            </div>
+          </div>
+          <div class="preset-row">
+            <button type="button" class="chip-btn active" data-preset="12">±12 ч</button>
+            <button type="button" class="chip-btn" data-preset="24">±24 ч</button>
+            <button type="button" class="chip-btn" data-preset="72">3 дня</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <span class="group-label">Регион</span>
+          <select id="regions" multiple aria-label="Регион"></select>
+          <div class="filter-hint">Кластеры по муниципалитетам, без одиночных МО</div>
+        </div>
+        <div class="filter-group">
+          <span class="group-label">Бренды</span>
+          <select id="brands" multiple aria-label="Бренды"></select>
+        </div>
+        <div class="filter-group">
+          <span class="group-label">АЗС</span>
+          <select id="stations" multiple aria-label="АЗС"></select>
+        </div>
+        <div class="filter-group">
+          <span class="group-label">Сейчас есть</span>
+          <select id="currentlyHas" multiple aria-label="Сейчас есть">
+            <option value="fuel_92">АИ-92</option>
+            <option value="fuel_95">АИ-95</option>
+            <option value="fuel_diesel">Дизель</option>
+          </select>
+          <div class="filter-hint">Только АЗС, где выбранное топливо есть сейчас</div>
+        </div>
+      </div>
+
+      <div class="filters-actions">
+        <button class="secondary" id="reset" type="button">Сброс</button>
+        <button id="apply">Применить период</button>
+      </div>
+    </section>
+
+    <section class="stats-wrap" id="stats"></section>
+
+    <section class="card" id="fuelChartsSection">
+      <div class="card-head">
+        <h2>Наличие топлива по АЗС</h2>
+        <p class="card-desc" id="fuelChartsDesc">Каждая АЗС — отдельная полоса на временной шкале</p>
+      </div>
+      <div class="chart-panel">
+        <div class="chart-legend">
+          <div class="legend-toolbar">
+            <button type="button" class="secondary" id="fuelHideAll">Снять все</button>
+            <button type="button" class="secondary" id="fuelShowAll">Показать все</button>
+          </div>
+          <div class="legend-list" id="fuelLegend"></div>
+        </div>
+        <div class="fuel-charts-stack">
+          <div class="fuel-chart-block" data-fuel-key="fuel_92">
+            <h3>АИ-92</h3>
+            <div class="state-legend">
+              <span class="pill pill-yes">✓ есть</span>
+              <span class="pill pill-no">✗ нет</span>
+              <span class="pill pill-off">⊘ не работает</span>
+              <span class="pill chip-muted">метки при смене</span>
+            </div>
+            <div id="fuelChart92" class="chart chart-compact"></div>
+          </div>
+          <div class="fuel-chart-block" data-fuel-key="fuel_95">
+            <h3>АИ-95</h3>
+            <div class="state-legend">
+              <span class="pill pill-yes">✓ есть</span>
+              <span class="pill pill-no">✗ нет</span>
+              <span class="pill pill-off">⊘ не работает</span>
+              <span class="pill chip-muted">метки при смене</span>
+            </div>
+            <div id="fuelChart95" class="chart chart-compact"></div>
+          </div>
+          <div class="fuel-chart-block" data-fuel-key="fuel_diesel">
+            <h3>Дизель</h3>
+            <div class="state-legend">
+              <span class="pill pill-yes">✓ есть</span>
+              <span class="pill pill-no">✗ нет</span>
+              <span class="pill pill-off">⊘ не работает</span>
+              <span class="pill chip-muted">метки при смене</span>
+            </div>
+            <div id="fuelChartDiesel" class="chart chart-compact"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Очереди по АЗС</h2>
+        <p class="card-desc">Метки: · нет · 30 · 60 · 60+</p>
+      </div>
+      <div class="chart-panel">
+        <div class="chart-legend">
+          <div class="legend-toolbar">
+            <button type="button" class="secondary" id="queueHideAll">Снять все</button>
+            <button type="button" class="secondary" id="queueShowAll">Показать все</button>
+          </div>
+          <div class="legend-list" id="queueLegend"></div>
+        </div>
+        <div id="queueChart" class="chart chart-compact"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Доля АЗС с топливом</h2>
+      <div id="summaryChart" class="chart"></div>
+    </section>
+
+    <section class="card">
+      <h2>Когда появилось топливо</h2>
+      <div class="table-wrap" id="fuelSinceTable"></div>
+    </section>
+
+    <section class="card">
+      <h2>Последнее состояние</h2>
+      <div class="table-wrap" id="latestTable"></div>
+    </section>
+
+    <footer class="site-footer">
+      Powered by <a href="https://positroid.tech" target="_blank" rel="noopener noreferrer">positroid</a>
+      <span class="site-footer-sep">·</span>
+      Based on <a href="https://gas-monitoring.admlr.lipetsk.ru/reports/" target="_blank" rel="noopener noreferrer">gas-monitoring.admlr.lipetsk.ru</a>
+    </footer>
+  </main>
+
+  <script>
+    const FUEL_LABELS = {
+      fuel_92: "АИ-92",
+      fuel_95: "АИ-95",
+      fuel_diesel: "Дизель",
+    };
+    const ALL_FUEL_KEYS = ["fuel_92", "fuel_95", "fuel_diesel"];
+    const QUEUE_LABELS = {
+      none: "нет",
+      up_to_30: "до 30",
+      "30_60": "30-60",
+      "60_plus": "60+",
+    };
+    const QUEUE_ORDER = ["none", "up_to_30", "30_60", "60_plus"];
+    const QUEUE_LANE_OFFSET = { 0: -0.33, 1: -0.11, 2: 0.11, 3: 0.33 };
+    const QUEUE_POINT_LABEL = { 0: "·", 1: "30", 2: "60", 3: "60+" };
+    const CHART_COLORS = [
+      "#5470c6", "#91cc75", "#fac858", "#ee6666", "#73c0de",
+      "#3ba272", "#fc8452", "#9a60b4", "#ea7ccc", "#6e7074",
+    ];
+
+    const fuelChart92 = echarts.init(document.getElementById("fuelChart92"));
+    const fuelChart95 = echarts.init(document.getElementById("fuelChart95"));
+    const fuelChartDiesel = echarts.init(document.getElementById("fuelChartDiesel"));
+    const fuelCharts = {
+      fuel_92: fuelChart92,
+      fuel_95: fuelChart95,
+      fuel_diesel: fuelChartDiesel,
+    };
+    const queueChart = echarts.init(document.getElementById("queueChart"));
+    const summaryChart = echarts.init(document.getElementById("summaryChart"));
+
+    let meta = null;
+    let cache = { latest: null, timeseries: [], summary: [], fuelSince: [] };
+    let fuelSinceSort = { column: "brand", dir: "asc" };
+    let fuelHiddenStations = new Set();
+    let queueHiddenStations = new Set();
+
+    function toLocalInputValue(iso) {
+      if (!iso) return "";
+      const d = iso instanceof Date ? iso : new Date(iso);
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function setDefaultDateRange() {
+      setDateRangeFromPreset(12);
+      updatePresetButtons(12);
+    }
+
+    function setDateRangeFromPreset(hours) {
+      const now = new Date();
+      const back = hours === 72 ? 72 : hours;
+      const forward = hours === 72 ? 12 : hours;
+      document.getElementById("from").value = toLocalInputValue(new Date(now.getTime() - back * 60 * 60 * 1000));
+      document.getElementById("to").value = toLocalInputValue(new Date(now.getTime() + forward * 60 * 60 * 1000));
+    }
+
+    function updatePresetButtons(activeHours) {
+      document.querySelectorAll("[data-preset]").forEach((btn) => {
+        btn.classList.toggle("active", activeHours !== null && Number(btn.dataset.preset) === activeHours);
+      });
+    }
+
+    function fromLocalInputValue(value) {
+      if (!value) return null;
+      return new Date(value).toISOString();
+    }
+
+    function selectedValues(id) {
+      return [...document.getElementById(id).selectedOptions].map((o) => o.value);
+    }
+
+    function setOptions(id, items, valueKey, labelKey) {
+      const select = document.getElementById(id);
+      select.innerHTML = "";
+      for (const item of items) {
+        const option = document.createElement("option");
+        option.value = item[valueKey];
+        option.textContent = item[labelKey];
+        select.appendChild(option);
+      }
+    }
+
+    function badge(value) {
+      if (value === "yes") return '<span class="badge yes">Да</span>';
+      if (value === "no") return '<span class="badge no">Нет</span>';
+      return '<span class="badge unknown">—</span>';
+    }
+
+    function queueLabel(value) {
+      if (!value) return "—";
+      return QUEUE_LABELS[value] || value;
+    }
+
+    function formatDateTime(iso) {
+      if (!iso) return "—";
+      return new Date(iso).toLocaleString("ru-RU");
+    }
+
+    function fuelNumeric(value) {
+      if (value === "yes") return 1;
+      if (value === "no") return 0;
+      return null;
+    }
+
+    function fuelChartStatus(row, fuelKey) {
+      if (row.is_working === "no") return 2;
+      return fuelNumeric(row[fuelKey]);
+    }
+
+    function queueNumeric(value) {
+      const idx = QUEUE_ORDER.indexOf(value);
+      return idx >= 0 ? idx : null;
+    }
+
+    async function fetchJson(url) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    }
+
+    function setMultiSelectValues(id, values, validSet) {
+      const wanted = new Set(values);
+      [...document.getElementById(id).options].forEach((option) => {
+        option.selected = wanted.has(option.value) && (!validSet || validSet.has(option.value));
+      });
+    }
+
+    function applyFiltersFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      document.getElementById("search").value = params.get("search") || "";
+
+      const validBrands = new Set(meta.brands);
+      setMultiSelectValues("brands", params.getAll("brands"), validBrands);
+
+      const validRegions = new Set((meta.region_groups || []).map((g) => g.id));
+      setMultiSelectValues("regions", params.getAll("regions"), validRegions);
+
+      const validStations = new Set(meta.stations.map((s) => s.station_id));
+      setMultiSelectValues("stations", params.getAll("stations"), validStations);
+
+      const validHas = new Set(["fuel_92", "fuel_95", "fuel_diesel"]);
+      setMultiSelectValues("currentlyHas", params.getAll("has"), validHas);
+    }
+
+    function syncFiltersToUrl() {
+      const params = new URLSearchParams();
+      const search = document.getElementById("search").value.trim();
+      if (search) params.set("search", search);
+      for (const brand of selectedValues("brands")) params.append("brands", brand);
+      for (const region of selectedValues("regions")) params.append("regions", region);
+      for (const station of selectedValues("stations")) params.append("stations", station);
+      for (const fuel of selectedValues("currentlyHas")) params.append("has", fuel);
+
+      const qs = params.toString();
+      const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+      window.history.replaceState(null, "", newUrl);
+    }
+
+    let searchSyncTimer = null;
+
+    function onFiltersChanged() {
+      syncFiltersToUrl();
+      renderAll();
+    }
+
+    function buildDateQuery() {
+      const params = new URLSearchParams();
+      const from = fromLocalInputValue(document.getElementById("from").value);
+      const to = fromLocalInputValue(document.getElementById("to").value);
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+      return params.toString();
+    }
+
+    function buildQuery(includeSearch = false) {
+      const params = new URLSearchParams();
+      const from = fromLocalInputValue(document.getElementById("from").value);
+      const to = fromLocalInputValue(document.getElementById("to").value);
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+      for (const brand of selectedValues("brands")) params.append("brands", brand);
+      for (const station of selectedValues("stations")) params.append("station_ids", station);
+      return params.toString();
+    }
+
+    function stationById(id) {
+      return meta.stations.find((s) => s.station_id === id);
+    }
+
+    function getCurrentStationState(stationId) {
+      const fromLatest = (cache.latest?.stations || []).find((s) => s.station_id === stationId);
+      if (fromLatest) return fromLatest;
+      return (cache.fuelSince || []).find((s) => s.station_id === stationId) || null;
+    }
+
+    function stationMatchesCurrentlyHas(stationId) {
+      const required = selectedValues("currentlyHas");
+      if (!required.length) return true;
+      const state = getCurrentStationState(stationId);
+      if (!state) return false;
+      return required.every((fuelKey) => state[fuelKey] === "yes");
+    }
+
+    function getActiveStationIds() {
+      const search = document.getElementById("search").value.trim().toLowerCase();
+      const manual = new Set(selectedValues("stations"));
+      const brandFilter = new Set(selectedValues("brands"));
+      const regionFilter = new Set(selectedValues("regions"));
+
+      return meta.stations
+        .filter((station) => {
+          if (manual.size && !manual.has(station.station_id)) return false;
+          if (brandFilter.size && !brandFilter.has(station.brand)) return false;
+          if (regionFilter.size && !regionFilter.has(station.region_group)) return false;
+          if (!stationMatchesCurrentlyHas(station.station_id)) return false;
+          if (!search) return true;
+          const haystack = `${station.brand} ${station.name} ${station.address} ${station.district || ""}`.toLowerCase();
+          return haystack.includes(search);
+        })
+        .map((station) => station.station_id);
+    }
+
+    function filterByStations(rows, idKey = "station_id") {
+      const active = new Set(getActiveStationIds());
+      return rows.filter((row) => active.has(row[idKey]));
+    }
+
+    function renderFilterNote(activeCount) {
+      const search = document.getElementById("search").value.trim();
+      const currentlyHas = selectedValues("currentlyHas");
+      const regions = selectedValues("regions");
+      const chips = [
+        `<span class="chip">АЗС: ${activeCount} / ${meta.stations.length}</span>`,
+      ];
+      if (regions.length) {
+        const labels = regions.map((id) => {
+          const group = (meta.region_groups || []).find((g) => g.id === id);
+          return group ? group.label : id;
+        });
+        chips.push(`<span class="chip chip-muted">регион: ${labels.join(", ")}</span>`);
+      }
+      if (search) chips.push(`<span class="chip chip-muted">поиск: «${search}»</span>`);
+      if (currentlyHas.length) {
+        chips.push(`<span class="chip chip-muted">сейчас есть: ${currentlyHas.map((f) => FUEL_LABELS[f]).join(", ")}</span>`);
+      }
+      document.getElementById("filterNote").innerHTML = chips.join("");
+    }
+
+    function fuelPct(value, total) {
+      if (!total) return null;
+      return Math.round((value / total) * 100);
+    }
+
+    function renderStats(latest, summary) {
+      const stats = document.getElementById("stats");
+      if (!latest) {
+        stats.innerHTML = '<div class="stats-meta"><div class="stat-meta-item"><div class="value">—</div><div class="label">Нет данных</div></div></div>';
+        return;
+      }
+      const last = summary.length ? summary[summary.length - 1] : null;
+      const total = last ? last.total : 0;
+      const fuels = [
+        { cls: "fuel-92", name: "АИ-92", pct: last ? fuelPct(last.fuel_92_yes, total) : null, count: last?.fuel_92_yes },
+        { cls: "fuel-95", name: "АИ-95", pct: last ? fuelPct(last.fuel_95_yes, total) : null, count: last?.fuel_95_yes },
+        { cls: "fuel-diesel", name: "Дизель", pct: last ? fuelPct(last.fuel_diesel_yes, total) : null, count: last?.fuel_diesel_yes },
+      ];
+
+      stats.innerHTML = `
+        <div class="stats-meta">
+          <div class="stat-meta-item">
+            <div class="value">${meta.snapshot_count || 0}</div>
+            <div class="label">Снимков</div>
+          </div>
+          <div class="stat-meta-item">
+            <div class="value">${total || "—"}</div>
+            <div class="label">АЗС в периоде</div>
+          </div>
+          <div class="stat-meta-item">
+            <div class="value small">${formatDateTime(latest.collected_at)}</div>
+            <div class="label">Последний сбор</div>
+          </div>
+        </div>
+        <div class="stats-fuel">
+          ${fuels.map((fuel) => `
+            <div class="stat-fuel ${fuel.cls}">
+              <div class="stat-fuel-head">
+                <span class="stat-fuel-name">${fuel.name}</span>
+                <span class="stat-fuel-pct">${fuel.pct ?? "—"}${fuel.pct !== null ? "%" : ""}</span>
+              </div>
+              <div class="stat-bar">
+                <div class="stat-bar-fill" style="width:${fuel.pct ?? 0}%"></div>
+              </div>
+              <div class="stat-fuel-foot">${fuel.count ?? "—"} из ${total || "—"} АЗС</div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function sortRows(rows, column, dir) {
+      const factor = dir === "asc" ? 1 : -1;
+      return [...rows].sort((a, b) => {
+        let av = a[column];
+        let bv = b[column];
+        if (column.endsWith("_since")) {
+          av = av ? new Date(av).getTime() : Number.NEGATIVE_INFINITY;
+          bv = bv ? new Date(bv).getTime() : Number.NEGATIVE_INFINITY;
+        } else if (column === "station") {
+          av = `${a.brand} ${a.address}`.toLowerCase();
+          bv = `${b.brand} ${b.address}`.toLowerCase();
+        } else {
+          av = (av ?? "").toString().toLowerCase();
+          bv = (bv ?? "").toString().toLowerCase();
+        }
+        if (av < bv) return -1 * factor;
+        if (av > bv) return 1 * factor;
+        return 0;
+      });
+    }
+
+    function sortHeader(label, column) {
+      const active = fuelSinceSort.column === column;
+      const mark = active ? (fuelSinceSort.dir === "asc" ? "▲" : "▼") : "↕";
+      return `<th class="sortable${active ? " sorted" : ""}" data-sort="${column}">${label}<span class="sort-mark">${mark}</span></th>`;
+    }
+
+    function renderFuelSinceTable(rows) {
+      const container = document.getElementById("fuelSinceTable");
+      if (!rows.length) {
+        container.innerHTML = '<div class="empty">Нет АЗС по текущему фильтру</div>';
+        return;
+      }
+
+      const sorted = sortRows(rows, fuelSinceSort.column, fuelSinceSort.dir);
+      const body = sorted.map((row) => `
+        <tr>
+          <td><strong>${row.brand}</strong><br>${row.address}</td>
+          <td>${formatDateTime(row.fuel_92_since)}</td>
+          <td>${formatDateTime(row.fuel_95_since)}</td>
+          <td>${formatDateTime(row.fuel_diesel_since)}</td>
+          <td>${badge(row.fuel_92)}</td>
+          <td>${badge(row.fuel_95)}</td>
+          <td>${badge(row.fuel_diesel)}</td>
+          <td>${queueLabel(row.queue)}</td>
+        </tr>
+      `).join("");
+
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              ${sortHeader("АЗС", "station")}
+              ${sortHeader("АИ-92 с", "fuel_92_since")}
+              ${sortHeader("АИ-95 с", "fuel_95_since")}
+              ${sortHeader("Дизель с", "fuel_diesel_since")}
+              ${sortHeader("Сейчас 92", "fuel_92")}
+              ${sortHeader("Сейчас 95", "fuel_95")}
+              ${sortHeader("Сейчас ДТ", "fuel_diesel")}
+              ${sortHeader("Очередь", "queue")}
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>`;
+
+      container.querySelectorAll("th.sortable").forEach((th) => {
+        th.addEventListener("click", () => {
+          const column = th.dataset.sort;
+          if (fuelSinceSort.column === column) {
+            fuelSinceSort.dir = fuelSinceSort.dir === "asc" ? "desc" : "asc";
+          } else {
+            fuelSinceSort.column = column;
+            fuelSinceSort.dir = "asc";
+          }
+          renderAll();
+        });
+      });
+    }
+
+    function renderLatestTable(latest) {
+      const container = document.getElementById("latestTable");
+      if (!latest || !latest.stations.length) {
+        container.innerHTML = '<div class="empty">Данных пока нет. Подождите первый сбор.</div>';
+        return;
+      }
+      const rows = latest.stations.map((s) => `
+        <tr>
+          <td><strong>${s.brand}</strong><br>${s.address}</td>
+          <td>${badge(s.is_working)}</td>
+          <td>${badge(s.fuel_92)}</td>
+          <td>${badge(s.fuel_95)}</td>
+          <td>${badge(s.fuel_diesel)}</td>
+          <td>${queueLabel(s.queue)}</td>
+          <td>${formatDateTime(s.last_report_at)}</td>
+        </tr>
+      `).join("");
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>АЗС</th><th>Работает</th><th>92</th><th>95</th><th>Дизель</th><th>Очередь</th><th>Последний отчёт</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }
+
+    function stationsFromTimeseries(timeseries) {
+      const seen = new Map();
+      for (const row of timeseries) {
+        if (!seen.has(row.station_id)) {
+          seen.set(row.station_id, {
+            station_id: row.station_id,
+            brand: row.brand,
+            address: row.address,
+            name: row.name,
+          });
+        }
+      }
+      return [...seen.values()].sort((a, b) =>
+        `${a.brand} ${a.address}`.localeCompare(`${b.brand} ${b.address}`, "ru")
+      );
+    }
+
+    function renderStationLegend(containerId, stations, hiddenSet, colorOffset = 0) {
+      const container = document.getElementById(containerId);
+      if (!stations.length) {
+        container.innerHTML = '<div class="empty">Нет АЗС по фильтру</div>';
+        return;
+      }
+
+      container.innerHTML = stations.map((station, index) => {
+        const checked = !hiddenSet.has(station.station_id);
+        const color = CHART_COLORS[(index + colorOffset) % CHART_COLORS.length];
+        return `
+          <label class="legend-item${checked ? "" : " off"}">
+            <input type="checkbox" data-station-id="${station.station_id}" ${checked ? "checked" : ""}>
+            <span class="legend-dot" style="background:${color}"></span>
+            <span class="legend-label"><strong>${station.brand}</strong><br>${station.address}</span>
+          </label>`;
+      }).join("");
+
+      container.querySelectorAll("input[type=checkbox]").forEach((input) => {
+        input.addEventListener("change", () => {
+          const stationId = input.dataset.stationId;
+          if (input.checked) hiddenSet.delete(stationId);
+          else hiddenSet.add(stationId);
+          renderChartsOnly();
+        });
+      });
+    }
+
+    function renderChartsOnly() {
+      const timeseries = filterByStations(cache.timeseries);
+      renderFuelCharts(timeseries);
+      renderQueueChart(timeseries);
+    }
+
+    function bindLegendBulkActions(hideBtnId, showBtnId, stations, hiddenSet) {
+      document.getElementById(hideBtnId).onclick = () => {
+        for (const station of stations) hiddenSet.add(station.station_id);
+        renderChartsOnly();
+      };
+      document.getElementById(showBtnId).onclick = () => {
+        hiddenSet.clear();
+        renderChartsOnly();
+      };
+    }
+
+    function fuelStatusLabel(value) {
+      if (value === 1) return "Есть";
+      if (value === 0) return "Нет";
+      if (value === 2) return "Не работает";
+      return "—";
+    }
+
+    function shortStationLabel(station) {
+      const text = station.brand || station.name || "";
+      return text.length > 20 ? `${text.slice(0, 18)}…` : text;
+    }
+
+    function laneCenter(laneIndex) {
+      return laneIndex + 0.5;
+    }
+
+    function laneY(laneIndex, fuelValue) {
+      const center = laneCenter(laneIndex);
+      if (fuelValue === 1) return center + 0.18;
+      if (fuelValue === 0) return center - 0.18;
+      return center;
+    }
+
+    function statusFromLaneY(y) {
+      const center = Math.round(y - 0.5) + 0.5;
+      const delta = y - center;
+      if (Math.abs(delta) <= 0.08) return 2;
+      if (delta > 0.08) return 1;
+      if (delta < -0.08) return 0;
+      return 2;
+    }
+
+    function fuelChangeLabel(status) {
+      if (status === 1) return "✓";
+      if (status === 0) return "✗";
+      return "⊘";
+    }
+
+    function fuelChangeColor(status) {
+      if (status === 1) return "#16a34a";
+      if (status === 0) return "#dc2626";
+      return "#6b7280";
+    }
+
+    function buildSwimlaneYAxis(laneLabels) {
+      return {
+        type: "value",
+        min: 0,
+        max: laneLabels.length,
+        interval: 0.5,
+        axisLabel: {
+          formatter(v) {
+            if (Math.abs(v - Math.round(v)) < 0.01) return "";
+            const idx = Math.floor(v);
+            if (idx >= 0 && idx < laneLabels.length && Math.abs(v - idx - 0.5) < 0.01) {
+              return laneLabels[idx];
+            }
+            return "";
+          },
+          margin: 10,
+          align: "right",
+          verticalAlign: "middle",
+        },
+        axisTick: { show: false },
+        splitLine: {
+          show: true,
+          interval: 1,
+          lineStyle: { type: "dashed", color: "#e8ebf0" },
+        },
+      };
+    }
+
+    function fuelChartHeight(stationCount) {
+      return Math.min(900, Math.max(280, stationCount * 36 + 56));
+    }
+
+    function buildFuelSeriesForStation(timeseries, stationId, fuelKey) {
+      return timeseries
+        .filter((row) => row.station_id === stationId)
+        .map((row) => [row.collected_at, fuelChartStatus(row, fuelKey)])
+        .filter(([, val]) => val !== null);
+    }
+
+    function renderSingleFuelChart(chart, timeseries, fuelKey, stations) {
+      const visibleStations = stations.filter((s) => !fuelHiddenStations.has(s.station_id));
+      const laneCount = visibleStations.length;
+      const laneLabels = visibleStations.map(shortStationLabel);
+      chart.getDom().style.height = `${fuelChartHeight(laneCount)}px`;
+
+      if (!laneCount) {
+        chart.setOption({
+          title: {
+            text: "Нет АЗС по фильтру",
+            left: "center",
+            top: "center",
+            textStyle: { color: "#667085", fontSize: 14, fontWeight: 400 },
+          },
+          xAxis: { show: false },
+          yAxis: { show: false },
+          series: [],
+        }, true);
+        chart.resize();
+        return;
+      }
+
+      const series = visibleStations.map((station, laneIndex) => {
+        const rawPoints = buildFuelSeriesForStation(timeseries, station.station_id, fuelKey)
+          .filter(([, val]) => val !== null);
+
+        const color = CHART_COLORS[laneIndex % CHART_COLORS.length];
+        const data = rawPoints.map(([ts, status], idx) => {
+          const isChange = idx > 0 && status !== rawPoints[idx - 1][1];
+          const isOffline = status === 2;
+          return {
+            value: [ts, laneY(laneIndex, status)],
+            symbol: isChange ? "circle" : "none",
+            symbolSize: isChange ? 8 : 0,
+            label: {
+              show: isChange,
+              formatter: fuelChangeLabel(status),
+              fontSize: 12,
+              fontWeight: 700,
+              color: fuelChangeColor(status),
+              position: "top",
+              distance: status === 1 ? 4 : 10,
+            },
+            lineStyle: isOffline
+              ? { type: "dashed", color: "#9ca3af", opacity: 0.75, width: 2 }
+              : undefined,
+            itemStyle: isOffline
+              ? { color: "#9ca3af", borderColor: "#fff", borderWidth: 1 }
+              : { color, borderColor: "#fff", borderWidth: 1 },
+          };
+        });
+
+        return {
+          name: `${station.brand} — ${station.address}`,
+          type: "line",
+          step: "end",
+          connectNulls: false,
+          showSymbol: true,
+          color,
+          lineStyle: { width: 2, color, opacity: 0.85 },
+          itemStyle: { color, borderColor: "#fff", borderWidth: 1 },
+          emphasis: { focus: "series" },
+          data,
+        };
+      });
+
+      chart.setOption({
+        title: { show: false },
+        tooltip: {
+          trigger: "axis",
+          axisPointer: { type: "line" },
+          formatter(params) {
+            if (!params.length) return "";
+            const time = formatDateTime(params[0].value[0]);
+            const lines = [`<strong>${FUEL_LABELS[fuelKey]}</strong> · ${time}`];
+            for (const item of params) {
+              const status = statusFromLaneY(item.value[1]);
+              lines.push(`${item.marker} ${item.seriesName}: <strong>${fuelStatusLabel(status)}</strong>`);
+            }
+            return lines.join("<br>");
+          },
+        },
+        legend: { show: false },
+        grid: { left: 128, right: 20, top: 16, bottom: 48 },
+        xAxis: { type: "time" },
+        yAxis: buildSwimlaneYAxis(laneLabels),
+        series,
+      }, true);
+      chart.resize();
+    }
+
+    function visibleFuelChartKeys() {
+      const selected = selectedValues("currentlyHas");
+      return selected.length ? selected : ALL_FUEL_KEYS;
+    }
+
+    function updateFuelChartsVisibility() {
+      const visible = new Set(visibleFuelChartKeys());
+      document.querySelectorAll(".fuel-chart-block[data-fuel-key]").forEach((block) => {
+        block.hidden = !visible.has(block.dataset.fuelKey);
+      });
+      const desc = document.getElementById("fuelChartsDesc");
+      const selected = selectedValues("currentlyHas");
+      desc.textContent = selected.length
+        ? `Показано: ${selected.map((k) => FUEL_LABELS[k]).join(", ")}`
+        : "Каждая АЗС — отдельная полоса на временной шкале";
+    }
+
+    function renderFuelCharts(timeseries) {
+      const stations = stationsFromTimeseries(timeseries);
+      updateFuelChartsVisibility();
+      renderStationLegend("fuelLegend", stations, fuelHiddenStations, 0);
+      for (const key of visibleFuelChartKeys()) {
+        renderSingleFuelChart(fuelCharts[key], timeseries, key, stations);
+      }
+    }
+
+    function queueLaneY(laneIndex, queueNum) {
+      const center = laneCenter(laneIndex);
+      if (queueNum === null || queueNum < 0) return center;
+      return center + (QUEUE_LANE_OFFSET[queueNum] ?? 0);
+    }
+
+    function queueFromLaneY(y) {
+      const center = Math.round(y - 0.5) + 0.5;
+      const delta = y - center;
+      if (delta < -0.25) return 0;
+      if (delta < -0.05) return 1;
+      if (delta < 0.15) return 2;
+      return 3;
+    }
+
+    function buildQueueSeriesForStation(timeseries, stationId) {
+      return timeseries
+        .filter((row) => row.station_id === stationId)
+        .map((row) => [row.collected_at, queueNumeric(row.queue)])
+        .filter(([, val]) => val !== null);
+    }
+
+    function renderQueueChart(timeseries) {
+      const stations = stationsFromTimeseries(timeseries);
+      renderStationLegend("queueLegend", stations, queueHiddenStations, 0);
+
+      const visibleStations = stations.filter((s) => !queueHiddenStations.has(s.station_id));
+      const laneCount = visibleStations.length;
+      const laneLabels = visibleStations.map(shortStationLabel);
+      queueChart.getDom().style.height = `${fuelChartHeight(laneCount)}px`;
+
+      if (!laneCount) {
+        queueChart.setOption({
+          title: {
+            text: "Нет АЗС по фильтру",
+            left: "center",
+            top: "center",
+            textStyle: { color: "#667085", fontSize: 14, fontWeight: 400 },
+          },
+          xAxis: { show: false },
+          yAxis: { show: false },
+          series: [],
+        }, true);
+        queueChart.resize();
+        return;
+      }
+
+      const series = visibleStations.map((station, laneIndex) => {
+        const points = buildQueueSeriesForStation(timeseries, station.station_id)
+          .map(([ts, val]) => [ts, queueLaneY(laneIndex, val)]);
+
+        const color = CHART_COLORS[laneIndex % CHART_COLORS.length];
+        return {
+          name: `${station.brand} — ${station.address}`,
+          type: "line",
+          step: "end",
+          connectNulls: false,
+          showSymbol: true,
+          symbol: "circle",
+          symbolSize: 8,
+          color,
+          lineStyle: { width: 2, color, opacity: 0.85 },
+          itemStyle: { color, borderColor: "#fff", borderWidth: 1 },
+          emphasis: { focus: "series" },
+          label: {
+            show: true,
+            formatter(params) {
+              const level = queueFromLaneY(params.value[1]);
+              return QUEUE_POINT_LABEL[level] ?? "";
+            },
+            fontSize: 11,
+            fontWeight: 700,
+            color: "#374151",
+            distance: 6,
+          },
+          data: points,
+        };
+      });
+
+      queueChart.setOption({
+        tooltip: {
+          trigger: "axis",
+          axisPointer: { type: "line" },
+          formatter(params) {
+            if (!params.length) return "";
+            const time = formatDateTime(params[0].value[0]);
+            const lines = [`<strong>Очередь</strong> · ${time}`];
+            for (const item of params) {
+              const level = queueFromLaneY(item.value[1]);
+              lines.push(`${item.marker} ${item.seriesName}: <strong>${queueLabel(QUEUE_ORDER[level])}</strong>`);
+            }
+            return lines.join("<br>");
+          },
+        },
+        legend: { show: false },
+        grid: { left: 128, right: 20, top: 16, bottom: 48 },
+        xAxis: { type: "time" },
+        yAxis: buildSwimlaneYAxis(laneLabels),
+        series,
+      }, true);
+      queueChart.resize();
+    }
+
+    function renderSummaryChart(summary) {
+      summaryChart.setOption({
+        tooltip: { trigger: "axis" },
+        legend: { data: ["АИ-92", "АИ-95", "Дизель", "Работают"] },
+        xAxis: {
+          type: "category",
+          data: summary.map((row) => formatDateTime(row.collected_at)),
+        },
+        yAxis: {
+          type: "value",
+          min: 0,
+          max: 100,
+          axisLabel: { formatter: "{value}%" },
+        },
+        series: [
+          {
+            name: "АИ-92",
+            type: "line",
+            data: summary.map((row) => Math.round((row.fuel_92_yes / row.total) * 100)),
+          },
+          {
+            name: "АИ-95",
+            type: "line",
+            data: summary.map((row) => Math.round((row.fuel_95_yes / row.total) * 100)),
+          },
+          {
+            name: "Дизель",
+            type: "line",
+            data: summary.map((row) => Math.round((row.fuel_diesel_yes / row.total) * 100)),
+          },
+          {
+            name: "Работают",
+            type: "line",
+            data: summary.map((row) => Math.round((row.working_yes / row.total) * 100)),
+          },
+        ],
+      }, true);
+    }
+
+    function renderAll() {
+      const activeIds = new Set(getActiveStationIds());
+      const timeseries = filterByStations(cache.timeseries);
+      const fuelSince = filterByStations(cache.fuelSince);
+      const globalSummary = cache.summary || [];
+
+      const latest = cache.latest
+        ? {
+            ...cache.latest,
+            stations: (cache.latest.stations || []).filter((s) => activeIds.has(s.station_id)),
+            station_count: [...activeIds].length,
+          }
+        : null;
+
+      renderFilterNote(activeIds.size);
+      renderStats(latest, globalSummary);
+      renderFuelSinceTable(fuelSince);
+      renderLatestTable(latest);
+      renderFuelCharts(timeseries);
+      renderQueueChart(timeseries);
+      renderSummaryChart(globalSummary);
+      bindLegendBulkActions("fuelHideAll", "fuelShowAll", stationsFromTimeseries(timeseries), fuelHiddenStations);
+      bindLegendBulkActions("queueHideAll", "queueShowAll", stationsFromTimeseries(timeseries), queueHiddenStations);
+    }
+
+    async function loadData() {
+      const query = buildQuery();
+      const dateQuery = buildDateQuery();
+      const [latest, timeseries, fuelSince, summary] = await Promise.all([
+        fetchJson("/api/latest"),
+        fetchJson(`/api/timeseries?${query}`),
+        fetchJson(`/api/fuel-since?${query}`),
+        fetchJson(`/api/summary?${dateQuery}`),
+      ]);
+
+      cache = { latest, timeseries, summary, fuelSince };
+
+      document.getElementById("subtitle").textContent = meta.from
+        ? `Данные с ${formatDateTime(meta.from)} по ${formatDateTime(meta.to)}`
+        : "Ожидание первого сбора данных";
+
+      renderAll();
+    }
+
+    async function init() {
+      meta = await fetchJson("/api/meta");
+      setOptions("brands", meta.brands.map((brand) => ({ value: brand, label: brand })), "value", "label");
+      setOptions(
+        "regions",
+        (meta.region_groups || []).map((group) => ({
+          value: group.id,
+          label: `${group.label} (${group.count})`,
+        })),
+        "value",
+        "label",
+      );
+      setOptions(
+        "stations",
+        meta.stations.map((s) => ({
+          value: s.station_id,
+          label: `${s.brand} — ${s.address}`,
+        })),
+        "value",
+        "label",
+      );
+
+      applyFiltersFromUrl();
+      setDefaultDateRange();
+
+      document.getElementById("apply").addEventListener("click", async () => {
+        syncFiltersToUrl();
+        await loadData();
+      });
+      document.getElementById("search").addEventListener("input", () => {
+        clearTimeout(searchSyncTimer);
+        searchSyncTimer = setTimeout(onFiltersChanged, 200);
+      });
+      document.getElementById("currentlyHas").addEventListener("change", onFiltersChanged);
+      document.getElementById("brands").addEventListener("change", onFiltersChanged);
+      document.getElementById("regions").addEventListener("change", onFiltersChanged);
+      document.getElementById("stations").addEventListener("change", onFiltersChanged);
+      document.getElementById("reset").addEventListener("click", () => {
+        document.getElementById("search").value = "";
+        [...document.getElementById("currentlyHas").options].forEach((o) => (o.selected = false));
+        [...document.getElementById("brands").options].forEach((o) => (o.selected = false));
+        [...document.getElementById("regions").options].forEach((o) => (o.selected = false));
+        [...document.getElementById("stations").options].forEach((o) => (o.selected = false));
+        setDefaultDateRange();
+        syncFiltersToUrl();
+        loadData();
+      });
+      document.querySelectorAll("[data-preset]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const hours = Number(btn.dataset.preset);
+          setDateRangeFromPreset(hours);
+          updatePresetButtons(hours);
+        });
+      });
+      document.getElementById("from").addEventListener("change", () => updatePresetButtons(null));
+      document.getElementById("to").addEventListener("change", () => updatePresetButtons(null));
+
+      window.addEventListener("resize", () => {
+        fuelChart92.resize();
+        fuelChart95.resize();
+        fuelChartDiesel.resize();
+        queueChart.resize();
+        summaryChart.resize();
+      });
+
+      await loadData();
+      setInterval(loadData, 60000);
+    }
+
+    init().catch((error) => {
+      document.getElementById("subtitle").textContent = `Ошибка загрузки: ${error.message}`;
+    });
+  </script>
+</body>
+</html>

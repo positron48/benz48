@@ -1,0 +1,474 @@
+from __future__ import annotations
+
+import json
+import logging
+import sqlite3
+import tempfile
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+from zoneinfo import ZoneInfo
+
+from app.config import settings, save_snapshot_files_enabled
+from app.parser import StationRecord
+from app.regions import build_region_meta, region_group_for_district
+
+logger = logging.getLogger(__name__)
+MOSCOW = ZoneInfo(settings.timezone)
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    collected_at TEXT NOT NULL UNIQUE,
+    filepath TEXT NOT NULL,
+    station_count INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS observations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    snapshot_id INTEGER NOT NULL,
+    collected_at TEXT NOT NULL,
+    station_id TEXT NOT NULL,
+    brand TEXT NOT NULL,
+    name TEXT NOT NULL,
+    district TEXT NOT NULL,
+    address TEXT NOT NULL,
+    is_working TEXT,
+    fuel_92 TEXT,
+    fuel_95 TEXT,
+    fuel_diesel TEXT,
+    queue TEXT,
+    reason TEXT,
+    expected_working_at TEXT,
+    last_report_at TEXT,
+    FOREIGN KEY (snapshot_id) REFERENCES snapshots(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_obs_collected_at ON observations(collected_at);
+CREATE INDEX IF NOT EXISTS idx_obs_station_id ON observations(station_id);
+CREATE INDEX IF NOT EXISTS idx_obs_brand ON observations(brand);
+"""
+
+COMPARE_FIELDS = (
+    "is_working",
+    "fuel_92",
+    "fuel_95",
+    "fuel_diesel",
+    "queue",
+    "reason",
+    "expected_working_at",
+    "last_report_at",
+)
+
+
+def observation_signature(row: dict[str, Any]) -> tuple[Any, ...]:
+    return tuple(row.get(field) for field in COMPARE_FIELDS)
+
+
+def dedupe_consecutive_observations(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    last_signature: dict[str, tuple[Any, ...]] = {}
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        station_id = row["station_id"]
+        signature = observation_signature(row)
+        if last_signature.get(station_id) == signature:
+            continue
+        last_signature[station_id] = signature
+        result.append(row)
+    return result
+
+
+def dedupe_consecutive_summary(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    summary_fields = ("total", "fuel_92_yes", "fuel_95_yes", "fuel_diesel_yes", "working_yes")
+    last_signature: tuple[Any, ...] | None = None
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        signature = tuple(row[field] for field in summary_fields)
+        if signature == last_signature:
+            continue
+        last_signature = signature
+        result.append(row)
+    return result
+
+
+class Storage:
+    def __init__(self, data_dir: Path | None = None) -> None:
+        self.data_dir = data_dir or settings.data_dir
+        self.snapshots_dir = self.data_dir / "snapshots"
+        self.db_path = self.data_dir / "history.db"
+        self.snapshots_dir.mkdir(parents=True, exist_ok=True)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self._init_db()
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA busy_timeout=5000")
+        return conn
+
+    def _init_db(self) -> None:
+        with self._connect() as conn:
+            conn.executescript(SCHEMA)
+
+    def snapshot_path(self, collected_at: datetime) -> Path:
+        local = collected_at.astimezone(MOSCOW)
+        filename = local.strftime("%Y-%m-%dT%H-%M-%S+03-00.json")
+        return (
+            self.snapshots_dir
+            / str(local.year)
+            / f"{local.month:02d}"
+            / f"{local.day:02d}"
+            / filename
+        )
+
+    def save_snapshot(
+        self,
+        stations: list[StationRecord],
+        source_url: str,
+        collected_at: datetime | None = None,
+    ) -> Path:
+        collected_at = collected_at or datetime.now(MOSCOW)
+        payload = {
+            "collected_at": collected_at.isoformat(),
+            "source_url": source_url,
+            "station_count": len(stations),
+            "stations": [station.to_dict() for station in stations],
+        }
+
+        path = self.snapshot_path(collected_at)
+        if save_snapshot_files_enabled():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=path.parent,
+                delete=False,
+                suffix=".tmp",
+            ) as tmp:
+                json.dump(payload, tmp, ensure_ascii=False, indent=2)
+                tmp_path = Path(tmp.name)
+            tmp_path.replace(path)
+        indexed = self._index_snapshot(path, payload)
+        if indexed:
+            logger.info("Saved snapshot %s (%s stations)", path, len(stations))
+        elif save_snapshot_files_enabled():
+            logger.info("Saved snapshot file only (no changes): %s", path)
+        else:
+            logger.info("Snapshot unchanged, DB index skipped")
+        return path
+
+    def _get_last_signatures(self, conn: sqlite3.Connection) -> dict[str, tuple[Any, ...]]:
+        rows = conn.execute(
+            """
+            SELECT station_id, is_working, fuel_92, fuel_95, fuel_diesel, queue,
+                   reason, expected_working_at, last_report_at
+            FROM observations o
+            WHERE collected_at = (
+                SELECT MAX(collected_at) FROM observations WHERE station_id = o.station_id
+            )
+            """
+        ).fetchall()
+        return {row["station_id"]: observation_signature(dict(row)) for row in rows}
+
+    def _index_snapshot(self, path: Path, payload: dict[str, Any]) -> bool:
+        collected_at = payload["collected_at"]
+        stations = payload["stations"]
+
+        with self._connect() as conn:
+            existing = conn.execute(
+                "SELECT id FROM snapshots WHERE collected_at = ?",
+                (collected_at,),
+            ).fetchone()
+            if existing:
+                logger.info("Snapshot already indexed: %s", collected_at)
+                return False
+
+            last_signatures = self._get_last_signatures(conn)
+            if last_signatures and all(
+                last_signatures.get(station["id"]) == observation_signature(station)
+                for station in stations
+            ):
+                logger.info(
+                    "All %s stations unchanged since last scan, skipping DB index",
+                    len(stations),
+                )
+                return False
+
+            cursor = conn.execute(
+                """
+                INSERT INTO snapshots (collected_at, filepath, station_count)
+                VALUES (?, ?, ?)
+                """,
+                (collected_at, str(path), len(stations)),
+            )
+            snapshot_id = cursor.lastrowid
+
+            conn.executemany(
+                """
+                INSERT INTO observations (
+                    snapshot_id, collected_at, station_id, brand, name, district,
+                    address, is_working, fuel_92, fuel_95, fuel_diesel, queue,
+                    reason, expected_working_at, last_report_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        snapshot_id,
+                        collected_at,
+                        s["id"],
+                        s["brand"],
+                        s["name"],
+                        s["district"],
+                        s["address"],
+                        s.get("is_working"),
+                        s.get("fuel_92"),
+                        s.get("fuel_95"),
+                        s.get("fuel_diesel"),
+                        s.get("queue"),
+                        s.get("reason"),
+                        s.get("expected_working_at"),
+                        s.get("last_report_at"),
+                    )
+                    for s in stations
+                ],
+            )
+            conn.commit()
+            return True
+
+    def get_meta(self) -> dict[str, Any]:
+        with self._connect() as conn:
+            range_row = conn.execute(
+                """
+                SELECT MIN(collected_at) AS min_at, MAX(collected_at) AS max_at,
+                       COUNT(DISTINCT collected_at) AS snapshot_count
+                FROM observations
+                """
+            ).fetchone()
+
+            stations = conn.execute(
+                """
+                SELECT station_id, brand, name, address, district
+                FROM observations
+                GROUP BY station_id
+                ORDER BY brand, name
+                """
+            ).fetchall()
+
+            brands = conn.execute(
+                "SELECT DISTINCT brand FROM observations ORDER BY brand"
+            ).fetchall()
+
+        station_rows = [dict(row) for row in stations]
+        for station in station_rows:
+            station["region_group"] = region_group_for_district(station.get("district"))
+
+        region_meta = build_region_meta(station_rows)
+
+        return {
+            "snapshot_count": range_row["snapshot_count"] or 0,
+            "from": range_row["min_at"],
+            "to": range_row["max_at"],
+            "brands": [row["brand"] for row in brands],
+            "stations": station_rows,
+            **region_meta,
+        }
+
+    def get_latest(self) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT collected_at, filepath, station_count
+                FROM snapshots
+                ORDER BY collected_at DESC
+                LIMIT 1
+                """
+            ).fetchone()
+            if not row:
+                return None
+
+            observations = conn.execute(
+                """
+                SELECT station_id, brand, name, district, address, is_working,
+                       fuel_92, fuel_95, fuel_diesel, queue, reason,
+                       expected_working_at, last_report_at, collected_at
+                FROM observations
+                WHERE collected_at = ?
+                ORDER BY brand, name
+                """,
+                (row["collected_at"],),
+            ).fetchall()
+
+        return {
+            "collected_at": row["collected_at"],
+            "filepath": row["filepath"],
+            "station_count": row["station_count"],
+            "stations": [dict(o) for o in observations],
+        }
+
+    def query_timeseries(
+        self,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        station_ids: list[str] | None = None,
+        brands: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        clauses = ["1=1"]
+        params: list[Any] = []
+
+        if date_from:
+            clauses.append("collected_at >= ?")
+            params.append(date_from)
+        if date_to:
+            clauses.append("collected_at <= ?")
+            params.append(date_to)
+        if station_ids:
+            placeholders = ",".join("?" for _ in station_ids)
+            clauses.append(f"station_id IN ({placeholders})")
+            params.extend(station_ids)
+        if brands:
+            placeholders = ",".join("?" for _ in brands)
+            clauses.append(f"brand IN ({placeholders})")
+            params.extend(brands)
+
+        query = f"""
+            SELECT collected_at, station_id, brand, name, address,
+                   is_working, fuel_92, fuel_95, fuel_diesel, queue,
+                   reason, expected_working_at, last_report_at
+            FROM observations
+            WHERE {' AND '.join(clauses)}
+            ORDER BY collected_at ASC, brand ASC, name ASC
+        """
+
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return dedupe_consecutive_observations([dict(row) for row in rows])
+
+    def query_summary(
+        self,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        station_ids: list[str] | None = None,
+        brands: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        clauses = ["1=1"]
+        params: list[Any] = []
+
+        if date_from:
+            clauses.append("collected_at >= ?")
+            params.append(date_from)
+        if date_to:
+            clauses.append("collected_at <= ?")
+            params.append(date_to)
+        if station_ids:
+            placeholders = ",".join("?" for _ in station_ids)
+            clauses.append(f"station_id IN ({placeholders})")
+            params.extend(station_ids)
+        if brands:
+            placeholders = ",".join("?" for _ in brands)
+            clauses.append(f"brand IN ({placeholders})")
+            params.extend(brands)
+
+        query = f"""
+            SELECT collected_at,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN fuel_92 = 'yes' THEN 1 ELSE 0 END) AS fuel_92_yes,
+                   SUM(CASE WHEN fuel_95 = 'yes' THEN 1 ELSE 0 END) AS fuel_95_yes,
+                   SUM(CASE WHEN fuel_diesel = 'yes' THEN 1 ELSE 0 END) AS fuel_diesel_yes,
+                   SUM(CASE WHEN is_working = 'yes' THEN 1 ELSE 0 END) AS working_yes
+            FROM observations
+            WHERE {' AND '.join(clauses)}
+            GROUP BY collected_at
+            ORDER BY collected_at ASC
+        """
+
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def query_fuel_since(
+        self,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        station_ids: list[str] | None = None,
+        brands: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        clauses = ["1=1"]
+        params: list[Any] = []
+
+        if date_from:
+            clauses.append("collected_at >= ?")
+            params.append(date_from)
+        if date_to:
+            clauses.append("collected_at <= ?")
+            params.append(date_to)
+        if station_ids:
+            placeholders = ",".join("?" for _ in station_ids)
+            clauses.append(f"station_id IN ({placeholders})")
+            params.extend(station_ids)
+        if brands:
+            placeholders = ",".join("?" for _ in brands)
+            clauses.append(f"brand IN ({placeholders})")
+            params.extend(brands)
+
+        query = f"""
+            SELECT
+                station_id,
+                brand,
+                name,
+                address,
+                MIN(CASE WHEN fuel_92 = 'yes' THEN collected_at END) AS fuel_92_since,
+                MIN(CASE WHEN fuel_95 = 'yes' THEN collected_at END) AS fuel_95_since,
+                MIN(CASE WHEN fuel_diesel = 'yes' THEN collected_at END) AS fuel_diesel_since
+            FROM observations
+            WHERE {' AND '.join(clauses)}
+            GROUP BY station_id, brand, name, address
+            ORDER BY brand ASC, name ASC
+        """
+
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+
+        latest_by_station = self._latest_by_station(station_ids, brands)
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            latest = latest_by_station.get(row["station_id"], {})
+            item["fuel_92"] = latest.get("fuel_92")
+            item["fuel_95"] = latest.get("fuel_95")
+            item["fuel_diesel"] = latest.get("fuel_diesel")
+            item["is_working"] = latest.get("is_working")
+            item["queue"] = latest.get("queue")
+            result.append(item)
+        return result
+
+    def _latest_by_station(
+        self,
+        station_ids: list[str] | None = None,
+        brands: list[str] | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        clauses = ["1=1"]
+        params: list[Any] = []
+
+        if station_ids:
+            placeholders = ",".join("?" for _ in station_ids)
+            clauses.append(f"station_id IN ({placeholders})")
+            params.extend(station_ids)
+        if brands:
+            placeholders = ",".join("?" for _ in brands)
+            clauses.append(f"brand IN ({placeholders})")
+            params.extend(brands)
+
+        query = f"""
+            SELECT station_id, fuel_92, fuel_95, fuel_diesel, is_working, queue
+            FROM observations o
+            WHERE {' AND '.join(clauses)}
+              AND collected_at = (
+                  SELECT MAX(collected_at) FROM observations WHERE station_id = o.station_id
+              )
+        """
+
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return {row["station_id"]: dict(row) for row in rows}

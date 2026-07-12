@@ -1,0 +1,13 @@
+.git
+.github
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+data/
+export/
+*.tar.gz
+.env
+Makefile
+README.md
+DEPLOY.md

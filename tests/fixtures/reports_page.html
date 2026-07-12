@@ -1,0 +1,1501 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Отчеты по АЗС</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f6f7f9;
+            --line: #d9dee7;
+            --muted: #667085;
+            --text: #1f2937;
+            --accent: #166534;
+            --accent-soft: #dcfce7;
+            --danger: #991b1b;
+            --danger-soft: #fee2e2;
+            --warning: #92400e;
+            --warning-soft: #fef3c7;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 14px;
+        }
+
+        main {
+            width: min(1440px, 100%);
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        h1 {
+            margin: 0 0 16px;
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .tabs,
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        a.button,
+        button.button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+            padding: 0 12px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: white;
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        a.button.active {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        a.button.download {
+            border-color: #14532d;
+            background: #14532d;
+            color: white;
+        }
+
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 8px;
+            align-items: end;
+            margin-bottom: 16px;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: white;
+        }
+
+        .field {
+            display: grid;
+            gap: 4px;
+        }
+
+        label {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        input,
+        select {
+            width: 100%;
+            min-height: 36px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 0 10px;
+            background: white;
+            color: var(--text);
+            font: inherit;
+        }
+
+        .summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 16px;
+            color: var(--muted);
+        }
+
+        .table-wrap {
+            overflow: auto;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: white;
+        }
+
+        table {
+            width: 100%;
+            min-width: 1260px;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--line);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            background: #eef2f6;
+            z-index: 1;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: .02em;
+            color: #475467;
+        }
+
+        tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            min-height: 24px;
+            padding: 0 8px;
+            border-radius: 999px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .status.ok {
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        .status.bad {
+            background: var(--danger-soft);
+            color: var(--danger);
+        }
+
+        .status.warn {
+            background: var(--warning-soft);
+            color: var(--warning);
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        @media (max-width: 720px) {
+            main {
+                padding: 16px;
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+
+            .filters {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Отчеты по АЗС</h1>
+
+    <div class="toolbar">
+        <nav class="tabs" aria-label="Фильтр отчета">
+<!--            <a class="button active" href="/reports/?scope=recent_reports&amp;search=&amp;brand=&amp;district=%D0%B3.%D0%BE.+%D0%B3%D0%BE%D1%80%D0%BE%D0%B4+%D0%9B%D0%B8%D0%BF%D0%B5%D1%86%D0%BA&amp;is_working=&amp;fuel_92_status=&amp;fuel_95_status=&amp;fuel_diesel_status=&amp;queue=&amp;reported=">-->
+<!--                Отчеты за 24 часа-->
+<!--            </a>-->
+<!--            <a class="button " href="/reports/?scope=all&amp;search=&amp;brand=&amp;district=%D0%B3.%D0%BE.+%D0%B3%D0%BE%D1%80%D0%BE%D0%B4+%D0%9B%D0%B8%D0%BF%D0%B5%D1%86%D0%BA&amp;is_working=&amp;fuel_92_status=&amp;fuel_95_status=&amp;fuel_diesel_status=&amp;queue=&amp;reported=">-->
+<!--                Все АЗС-->
+<!--            </a>-->
+<!--            <a class="button " href="/reports/?scope=working_with_fuel&amp;search=&amp;brand=&amp;district=%D0%B3.%D0%BE.+%D0%B3%D0%BE%D1%80%D0%BE%D0%B4+%D0%9B%D0%B8%D0%BF%D0%B5%D1%86%D0%BA&amp;is_working=&amp;fuel_92_status=&amp;fuel_95_status=&amp;fuel_diesel_status=&amp;queue=&amp;reported=">-->
+<!--                Работают и есть топливо-->
+<!--            </a>-->
+<!--            <a class="button " href="/reports/?scope=working_with_fuel_fresh&amp;search=&amp;brand=&amp;district=%D0%B3.%D0%BE.+%D0%B3%D0%BE%D1%80%D0%BE%D0%B4+%D0%9B%D0%B8%D0%BF%D0%B5%D1%86%D0%BA&amp;is_working=&amp;fuel_92_status=&amp;fuel_95_status=&amp;fuel_diesel_status=&amp;queue=&amp;reported=">-->
+<!--                Работают и есть топливо до 90 мин-->
+<!--            </a>-->
+        </nav>
+
+        <div class="actions">
+            <a class="button download" href="https://map48.ru/fuel-monitoring" target="_blank" rel="noopener noreferrer" data-track-event="map_click">
+                Показать на карте
+            </a>
+<!--            <a class="button download" href="/reports/download/?scope=all&amp;search=&amp;brand=&amp;district=%D0%B3.%D0%BE.+%D0%B3%D0%BE%D1%80%D0%BE%D0%B4+%D0%9B%D0%B8%D0%BF%D0%B5%D1%86%D0%BA&amp;is_working=&amp;fuel_92_status=&amp;fuel_95_status=&amp;fuel_diesel_status=&amp;queue=&amp;reported=">-->
+<!--                Скачать все-->
+<!--            </a>-->
+<!--            <a class="button download" href="/reports/download/?scope=working_with_fuel&amp;search=&amp;brand=&amp;district=%D0%B3.%D0%BE.+%D0%B3%D0%BE%D1%80%D0%BE%D0%B4+%D0%9B%D0%B8%D0%BF%D0%B5%D1%86%D0%BA&amp;is_working=&amp;fuel_92_status=&amp;fuel_95_status=&amp;fuel_diesel_status=&amp;queue=&amp;reported=">-->
+<!--                Скачать с топливом-->
+<!--            </a>-->
+<!--            <a class="button download" href="/reports/download/?scope=working_with_fuel_fresh&amp;search=&amp;brand=&amp;district=%D0%B3.%D0%BE.+%D0%B3%D0%BE%D1%80%D0%BE%D0%B4+%D0%9B%D0%B8%D0%BF%D0%B5%D1%86%D0%BA&amp;is_working=&amp;fuel_92_status=&amp;fuel_95_status=&amp;fuel_diesel_status=&amp;queue=&amp;reported=">-->
+<!--                Скачать свежие с топливом-->
+<!--            </a>-->
+<!--            <a class="button download" href="/reports/press-release/?scope=working_with_fuel&amp;search=&amp;brand=&amp;district=%D0%B3.%D0%BE.+%D0%B3%D0%BE%D1%80%D0%BE%D0%B4+%D0%9B%D0%B8%D0%BF%D0%B5%D1%86%D0%BA&amp;is_working=&amp;fuel_92_status=&amp;fuel_95_status=&amp;fuel_diesel_status=&amp;queue=&amp;reported=">-->
+<!--                Пресс релиз-->
+<!--            </a>-->
+<!--            <a class="button download" href="/reports/press-release/page/?scope=working_with_fuel&amp;search=&amp;brand=&amp;district=%D0%B3.%D0%BE.+%D0%B3%D0%BE%D1%80%D0%BE%D0%B4+%D0%9B%D0%B8%D0%BF%D0%B5%D1%86%D0%BA&amp;is_working=&amp;fuel_92_status=&amp;fuel_95_status=&amp;fuel_diesel_status=&amp;queue=&amp;reported=">-->
+<!--                Пресс релиз скопировать-->
+<!--            </a>-->
+        </div>
+    </div>
+
+    <form class="filters" method="get">
+        <input type="hidden" name="scope" value="recent_reports">
+
+        <div class="field">
+            <label for="search">Поиск</label>
+            <input id="search" name="search" value="" placeholder="АЗС, МО, адрес, причина">
+        </div>
+
+        <div class="field">
+            <label for="brand">Бренд</label>
+            <select id="brand" name="brand">
+                <option value="">Все</option>
+                
+                    <option value="TEBOIL" >TEBOIL</option>
+                
+                    <option value="Газпром" >Газпром</option>
+                
+                    <option value="ГАЗПРОМ" >ГАЗПРОМ</option>
+                
+                    <option value="ЛУКОЙЛ" >ЛУКОЙЛ</option>
+                
+                    <option value="Роснефть" >Роснефть</option>
+                
+                    <option value="РОСНЕФТЬ" >РОСНЕФТЬ</option>
+                
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="district">МО</label>
+            <select id="district" name="district">
+                <option value="">Все</option>
+                
+                    <option value="Воловский муниципальный округ" >Воловский муниципальный округ</option>
+                
+                    <option value="г.о. город Елец" >г.о. город Елец</option>
+                
+                    <option value="г.о. город Липецк" selected>г.о. город Липецк</option>
+                
+                    <option value="Грязинский муниципальный округ" >Грязинский муниципальный округ</option>
+                
+                    <option value="Данковский муниципальный округ" >Данковский муниципальный округ</option>
+                
+                    <option value="Добринский муниципальный округ" >Добринский муниципальный округ</option>
+                
+                    <option value="Добровский муниципальный округ" >Добровский муниципальный округ</option>
+                
+                    <option value="Долгоруковский муниципальный округ" >Долгоруковский муниципальный округ</option>
+                
+                    <option value="Задонский муниципальный округ" >Задонский муниципальный округ</option>
+                
+                    <option value="Измалковский муниципальный округ" >Измалковский муниципальный округ</option>
+                
+                    <option value="Краснинский муниципальный округ" >Краснинский муниципальный округ</option>
+                
+                    <option value="Лебедянский муниципальный округ" >Лебедянский муниципальный округ</option>
+                
+                    <option value="Левтолстовский муниципальный район" >Левтолстовский муниципальный район</option>
+                
+                    <option value="Липецкий муниципальный округ" >Липецкий муниципальный округ</option>
+                
+                    <option value="Становлянский муниципальный округ" >Становлянский муниципальный округ</option>
+                
+                    <option value="Тербунский муниципальный округ" >Тербунский муниципальный округ</option>
+                
+                    <option value="Усманский муниципальный округ" >Усманский муниципальный округ</option>
+                
+                    <option value="Хлевенский муниципальный округ" >Хлевенский муниципальный округ</option>
+                
+                    <option value="Чаплыгинский муниципальный округ" >Чаплыгинский муниципальный округ</option>
+                
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="is_working">Работает</label>
+            <select id="is_working" name="is_working">
+                <option value="">Все</option>
+                <option value="yes" >Да</option>
+                <option value="no" >Нет</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="fuel_92_status">92</label>
+            <select id="fuel_92_status" name="fuel_92_status">
+                <option value="">Все</option>
+                
+                    <option value="yes" >Да</option>
+                
+                    <option value="no" >Нет</option>
+                
+                    <option value="ending" >Заканчивается</option>
+                
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="fuel_95_status">95</label>
+            <select id="fuel_95_status" name="fuel_95_status">
+                <option value="">Все</option>
+                
+                    <option value="yes" >Да</option>
+                
+                    <option value="no" >Нет</option>
+                
+                    <option value="ending" >Заканчивается</option>
+                
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="fuel_diesel_status">Дизель</label>
+            <select id="fuel_diesel_status" name="fuel_diesel_status">
+                <option value="">Все</option>
+                
+                    <option value="yes" >Да</option>
+                
+                    <option value="no" >Нет</option>
+                
+                    <option value="ending" >Заканчивается</option>
+                
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="queue">Очередь</label>
+            <select id="queue" name="queue">
+                <option value="">Все</option>
+                
+                    <option value="up_to_30" >до 30</option>
+                
+                    <option value="from_30_to_60" >30-60</option>
+                
+                    <option value="more_than_60" >60+</option>
+                
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="reported">Отчет</label>
+            <select id="reported" name="reported">
+                <option value="">Все</option>
+                <option value="yes" >Есть</option>
+                <option value="no" >Нет</option>
+            </select>
+        </div>
+
+        <button class="button active" type="submit">Фильтр</button>
+        <a class="button" href="/reports/?scope=recent_reports">Сброс</a>
+    </form>
+
+    <div class="summary">
+<!--        <span>Отчеты за 24 часа: 71</span>-->
+<!--        <span>Всего АЗС: 100</span>-->
+<!--        <span>Работают и есть топливо: 63</span>-->
+<!--        <span>Работают и есть топливо до 90 мин: 49</span>-->
+<!--        <span>Показано: 24</span>-->
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr>
+                <th>АЗС</th>
+                <th>МО</th>
+                <th>Адрес</th>
+                <th>Работает</th>
+                <th>92</th>
+                <th>95</th>
+                <th>Дизель</th>
+                <th>Очередь</th>
+                <th>Причина</th>
+                <th>Когда заработает</th>
+                <th>Последний отчет</th>
+            </tr>
+            </thead>
+            <tbody>
+            
+                <tr>
+                    <td>
+                        <strong>TEBOIL</strong><br>
+                        <span class="muted">г. Липецк, пл. Петра Великого, 3, TEBOIL, АЗС №1086 Неделина</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, пл. Петра Великого, 3</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">60+</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:15:25</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>TEBOIL</strong><br>
+                        <span class="muted">г. Липецк, ул. Зои Космодемьянской, 228Б, TEBOIL, АЗС №1090 Алмазная</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Зои Космодемьянской, 228Б</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">до 30</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status bad">2026-07-11 14:31:11</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>TEBOIL</strong><br>
+                        <span class="muted">г. Липецк, ул. Катукова, 56, TEBOIL, АЗС №1085 Катукова</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Катукова, 56</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status warn">30-60</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:33:37</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>ГАЗПРОМ</strong><br>
+                        <span class="muted">г. Липецк, ул. Катукова, 1, ГАЗПРОМ, АЗС №382</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Катукова, 1</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">60+</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:56:05</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>ГАЗПРОМ</strong><br>
+                        <span class="muted">г. Липецк, ул. Металлургов, 2Д, ГАЗПРОМ, АЗС №385</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Металлургов, 2Д</td>
+                    <td>
+                        
+                            <span class="status bad">Нет</span>
+                        
+                    </td>
+                    
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    
+                    <td>Нет топлива</td>
+                    <td>Не знаем</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:31:39</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>ГАЗПРОМ</strong><br>
+                        <span class="muted">г. Липецк, ул. Металлургов, 8, ГАЗПРОМ, АЗС №135</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Металлургов, 8</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">до 30</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:39:47</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>ГАЗПРОМ</strong><br>
+                        <span class="muted">г. Липецк, ул. Юношеская, 45/1, ГАЗПРОМ, АЗС №137</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Юношеская, 45/1</td>
+                    <td>
+                        
+                            <span class="status bad">Нет</span>
+                        
+                    </td>
+                    
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    
+                    <td>Бензина и дизеля нет</td>
+                    <td>Сегодня привоза точно не будет. А когда привезут на заправке не знают</td>
+                    <td>
+                        
+                            
+                                <span class="status bad">2026-07-11 14:52:03</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>ЛУКОЙЛ</strong><br>
+                        <span class="muted">г. Липецк, пр-д Универсальный, 1, ЛУКОЙЛ, АЗС №48751</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, пр-д Универсальный, 1</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">до 30</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:59:19</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>ЛУКОЙЛ</strong><br>
+                        <span class="muted">г. Липецк, ул. Адмирала Макарова, 23, ЛУКОЙЛ, АЗС №48755</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Адмирала Макарова, 23</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">до 30</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:16:15</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>ЛУКОЙЛ</strong><br>
+                        <span class="muted">г. Липецк, ул. Катукова, 49, ЛУКОЙЛ, АЗС №48750</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Катукова, 49</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">60+</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 17:01:27</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>ЛУКОЙЛ</strong><br>
+                        <span class="muted">г. Липецк, ул. Краснозаводская, 2Б, ЛУКОЙЛ, АЗС №48753</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Краснозаводская, 2Б</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">до 30</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status bad">2026-07-11 15:00:08</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>ЛУКОЙЛ</strong><br>
+                        <span class="muted">г. Липецк, ул. Терешковой, 41, ЛУКОЙЛ, АЗС №48752</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Терешковой, 41</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">до 30</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 17:01:06</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>ЛУКОЙЛ</strong><br>
+                        <span class="muted">г. Липецк, ул. Ферросплавная, 43, ЛУКОЙЛ, АЗС №48754</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Ферросплавная, 43</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">до 30</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 15:53:47</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>Роснефть</strong><br>
+                        <span class="muted">г. Липецк, ул. Неделина, 1, Роснефть, 217</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Неделина, 1</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">до 30</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:58:33</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>РОСНЕФТЬ</strong><br>
+                        <span class="muted">г. Липецк, ул. 2-я Индустриальная, 19, РОСНЕФТЬ, АЗС №260</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. 2-я Индустриальная, 19</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status warn">Заканчивается</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status warn">Заканчивается</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">60+</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:49:35</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>РОСНЕФТЬ</strong><br>
+                        <span class="muted">г. Липецк, ул. Баумана, 285/1, РОСНЕФТЬ, АЗС №228</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Баумана, 285/1</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status warn">30-60</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:55:22</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>РОСНЕФТЬ</strong><br>
+                        <span class="muted">г. Липецк, ул. Гагарина, 100А, РОСНЕФТЬ, АЗС №201</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Гагарина, 100А</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">60+</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:56:17</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>РОСНЕФТЬ</strong><br>
+                        <span class="muted">г. Липецк, ул. Гагарина, 112, РОСНЕФТЬ, АЗС №242</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Гагарина, 112</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status warn">Заканчивается</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status warn">30-60</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:53:52</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>РОСНЕФТЬ</strong><br>
+                        <span class="muted">г. Липецк, ул. Зои Космодемьянской, 259, РОСНЕФТЬ, АЗС №209</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Зои Космодемьянской, 259</td>
+                    <td>
+                        
+                            <span class="status bad">Нет</span>
+                        
+                    </td>
+                    
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    
+                    <td>Слив топлива</td>
+                    <td>После слива</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:52:59</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>РОСНЕФТЬ</strong><br>
+                        <span class="muted">​г. Липецк Район Цемзавода, вл3​ улица Ковалёва, 124</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Ковалева, сооружение 124 корпус 1</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">Нет</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">до 30</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:01:16</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>РОСНЕФТЬ</strong><br>
+                        <span class="muted">г. Липецк, ул. Московская, 79/1, РОСНЕФТЬ, АЗС №222</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Московская, 79/1</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status warn">30-60</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:30:55</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>РОСНЕФТЬ</strong><br>
+                        <span class="muted">г. Липецк, ул. Саратовская, РОСНЕФТЬ, АЗС №295</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ул. Саратовская</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status warn">30-60</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:52:42</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>РОСНЕФТЬ</strong><br>
+                        <span class="muted">г. Липецк, ш. Воронежское, 2, РОСНЕФТЬ, АЗС №203</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ш. Воронежское, 2</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status bad">60+</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:09:53</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+                <tr>
+                    <td>
+                        <strong>РОСНЕФТЬ</strong><br>
+                        <span class="muted">г. Липецк, ш. Лебедянское, РОСНЕФТЬ, АЗС №214</span>
+                    </td>
+                    <td>г.о. город Липецк</td>
+                    <td>г. Липецк, ш. Лебедянское</td>
+                    <td>
+                        
+                            <span class="status ok">Да</span>
+                        
+                    </td>
+                    
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status ok">Да</span>
+                            
+                        </td>
+                        <td>
+                            
+                                <span class="status warn">30-60</span>
+                            
+                        </td>
+                    
+                    <td>-</td>
+                    <td>-</td>
+                    <td>
+                        
+                            
+                                <span class="status ok">2026-07-11 16:16:44</span>
+                            
+                        
+                    </td>
+                </tr>
+            
+            </tbody>
+        </table>
+    </div>
+</main>
+<script>
+    (function () {
+        var trackUrl = "/reports/track/";
+
+        function track(eventName) {
+            var body = new URLSearchParams();
+            body.append("event", eventName);
+
+            if (navigator.sendBeacon) {
+                navigator.sendBeacon(trackUrl, body);
+                return;
+            }
+
+            fetch(trackUrl, {
+                method: "POST",
+                body: body,
+                keepalive: true
+            }).catch(function () {});
+        }
+
+        track("page_view");
+
+        var mapButton = document.querySelector('[data-track-event="map_click"]');
+        if (mapButton) {
+            mapButton.addEventListener("click", function () {
+                track("map_click");
+            });
+        }
+    }());
+</script>
+</body>
+</html>
