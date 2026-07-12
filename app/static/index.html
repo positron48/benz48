@@ -1470,6 +1470,11 @@
         } else if (column === "station") {
           av = `${a.brand} ${a.address}`.toLowerCase();
           bv = `${b.brand} ${b.address}`.toLowerCase();
+        } else if (column === "queue") {
+          av = queueNumeric(av);
+          bv = queueNumeric(bv);
+          av = av ?? Number.POSITIVE_INFINITY;
+          bv = bv ?? Number.POSITIVE_INFINITY;
         } else {
           av = (av ?? "").toString().toLowerCase();
           bv = (bv ?? "").toString().toLowerCase();

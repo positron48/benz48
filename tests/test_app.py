@@ -10,7 +10,7 @@ from app.parser import (
     parse_report_datetime,
     parse_reports_html,
 )
-from app.storage import Storage, dedupe_consecutive_observations
+from app.storage import Storage, dedupe_consecutive_observations, fuel_yes_since
 
 FIXTURE = Path(__file__).parent / "fixtures" / "reports_page.html"
 
@@ -35,7 +35,7 @@ def test_normalization():
     assert parse_report_datetime("2026-07-11 16:15:25") == "2026-07-11T16:15:25+03:00"
 
 
-def test_dedupe_consecutive_observations():
+def test_dedupe_consecutive_observations() -> None:
     base = {
         "is_working": "yes",
         "fuel_92": "yes",
@@ -55,6 +55,25 @@ def test_dedupe_consecutive_observations():
     assert len(deduped) == 2
     assert deduped[0]["collected_at"] == "t1"
     assert deduped[1]["collected_at"] == "t3"
+
+
+def test_fuel_yes_since_uses_latest_spell_after_no() -> None:
+    rows = [
+        {"station_id": "a", "collected_at": "2026-07-11T17:09:20+03:00", "fuel_95": "yes"},
+        {"station_id": "a", "collected_at": "2026-07-11T17:40:00+03:00", "fuel_95": "no"},
+        {"station_id": "a", "collected_at": "2026-07-12T08:01:18+03:00", "fuel_95": "yes"},
+        {"station_id": "a", "collected_at": "2026-07-12T09:21:18+03:00", "fuel_95": None},
+        {"station_id": "a", "collected_at": "2026-07-12T10:31:18+03:00", "fuel_95": "yes"},
+    ]
+    assert fuel_yes_since(rows, "fuel_95") == "2026-07-12T08:01:18+03:00"
+
+
+def test_fuel_yes_since_none_when_currently_unavailable() -> None:
+    rows = [
+        {"station_id": "a", "collected_at": "2026-07-11T17:09:20+03:00", "fuel_95": "yes"},
+        {"station_id": "a", "collected_at": "2026-07-11T17:40:00+03:00", "fuel_95": "no"},
+    ]
+    assert fuel_yes_since(rows, "fuel_95") is None
 
 
 def test_skip_unchanged_snapshot_index(tmp_path):

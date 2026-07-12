@@ -91,6 +91,24 @@ def dedupe_consecutive_summary(rows: list[dict[str, Any]]) -> list[dict[str, Any
     return result
 
 
+def fuel_yes_since(rows: list[dict[str, Any]], fuel_key: str) -> str | None:
+    """First yes after the latest no while fuel is currently available."""
+    if not rows:
+        return None
+    ordered = sorted(rows, key=lambda row: row["collected_at"])
+    if ordered[-1].get(fuel_key) != "yes":
+        return None
+
+    since: str | None = None
+    for row in ordered:
+        value = row.get(fuel_key)
+        if value == "no":
+            since = None
+        elif value == "yes" and since is None:
+            since = row["collected_at"]
+    return since
+
+
 class Storage:
     def __init__(self, data_dir: Path | None = None) -> None:
         self.data_dir = data_dir or settings.data_dir
@@ -496,34 +514,51 @@ class Storage:
             params.extend(brands)
 
         query = f"""
-            SELECT
-                station_id,
-                brand,
-                name,
-                address,
-                MIN(CASE WHEN fuel_92 = 'yes' THEN collected_at END) AS fuel_92_since,
-                MIN(CASE WHEN fuel_95 = 'yes' THEN collected_at END) AS fuel_95_since,
-                MIN(CASE WHEN fuel_diesel = 'yes' THEN collected_at END) AS fuel_diesel_since
+            SELECT collected_at, station_id, brand, name, address,
+                   fuel_92, fuel_95, fuel_diesel, is_working, queue
             FROM observations
             WHERE {' AND '.join(clauses)}
-            GROUP BY station_id, brand, name, address
-            ORDER BY brand ASC, name ASC
+            ORDER BY station_id ASC, collected_at ASC
         """
 
         with self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
 
-        latest_by_station = self._latest_by_station(station_ids, brands)
-        result: list[dict[str, Any]] = []
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        station_meta: dict[str, dict[str, Any]] = {}
         for row in rows:
             item = dict(row)
-            latest = latest_by_station.get(row["station_id"], {})
-            item["fuel_92"] = latest.get("fuel_92")
-            item["fuel_95"] = latest.get("fuel_95")
-            item["fuel_diesel"] = latest.get("fuel_diesel")
-            item["is_working"] = latest.get("is_working")
-            item["queue"] = latest.get("queue")
-            result.append(item)
+            station_id = item["station_id"]
+            grouped.setdefault(station_id, []).append(item)
+            station_meta[station_id] = {
+                "station_id": station_id,
+                "brand": item["brand"],
+                "name": item["name"],
+                "address": item["address"],
+            }
+
+        latest_by_station = self._latest_by_station(station_ids, brands)
+        result: list[dict[str, Any]] = []
+        for station_id in sorted(
+            station_meta,
+            key=lambda sid: (station_meta[sid]["brand"], station_meta[sid]["name"]),
+        ):
+            meta = station_meta[station_id]
+            station_rows = dedupe_consecutive_observations(grouped[station_id])
+            latest = latest_by_station.get(station_id, {})
+            result.append(
+                {
+                    **meta,
+                    "fuel_92_since": fuel_yes_since(station_rows, "fuel_92"),
+                    "fuel_95_since": fuel_yes_since(station_rows, "fuel_95"),
+                    "fuel_diesel_since": fuel_yes_since(station_rows, "fuel_diesel"),
+                    "fuel_92": latest.get("fuel_92"),
+                    "fuel_95": latest.get("fuel_95"),
+                    "fuel_diesel": latest.get("fuel_diesel"),
+                    "is_working": latest.get("is_working"),
+                    "queue": latest.get("queue"),
+                }
+            )
         return result
 
     def _latest_by_station(
