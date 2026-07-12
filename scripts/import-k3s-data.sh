@@ -16,7 +16,7 @@ if [[ ! -f "$ARCHIVE" ]]; then
   exit 1
 fi
 
-POD="$(kubectl -n "$NAMESPACE" get pods -l app=lipetsk-gas-monitor -o jsonpath='{.items[0].metadata.name}')"
+POD="$(kubectl -n "$NAMESPACE" get pods -l app=lipetsk-gas-monitor,component=web -o jsonpath='{.items[0].metadata.name}')"
 if [[ -z "$POD" ]]; then
   echo "ERROR: pod not found in namespace $NAMESPACE" >&2
   exit 1
@@ -41,7 +41,11 @@ kubectl -n "$NAMESPACE" exec "$POD" -c web -- sh -c '
   cat import-stage/MANIFEST.json
 '
 
-echo "Restarting deployment to reopen SQLite cleanly..."
-kubectl -n "$NAMESPACE" rollout restart "deployment/$DEPLOYMENT"
-kubectl -n "$NAMESPACE" rollout status "deployment/$DEPLOYMENT" --timeout=120s
+echo "Restarting deployments to reopen SQLite cleanly..."
+kubectl -n "$NAMESPACE" scale deployment/lipetsk-gas-monitor-collector --replicas=0 2>/dev/null || true
+kubectl -n "$NAMESPACE" rollout restart deployment/lipetsk-gas-monitor-web 2>/dev/null \
+  || kubectl -n "$NAMESPACE" rollout restart "deployment/$DEPLOYMENT"
+kubectl -n "$NAMESPACE" rollout status deployment/lipetsk-gas-monitor-web --timeout=120s 2>/dev/null \
+  || kubectl -n "$NAMESPACE" rollout status "deployment/$DEPLOYMENT" --timeout=120s
+kubectl -n "$NAMESPACE" scale deployment/lipetsk-gas-monitor-collector --replicas=1 2>/dev/null || true
 echo "Done. Check https://gas.qantrix.ru/api/meta"

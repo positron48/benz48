@@ -39,18 +39,21 @@ Flux ImagePolicy подхватывает digest автоматически.
 ## Архитектура pod
 
 ```
-┌─────────────────────────────────────┐
-│  lipetsk-gas-monitor (1 replica)  │
-│  ┌─────────┐  ┌──────────────────┐  │
-│  │   web   │  │    collector     │  │
-│  │ :8000   │  │  loop 5 min      │  │
-│  └────┬────┘  └────────┬─────────┘  │
-│       └───────┬────────┘            │
-│         PVC /app/data               │
-│         └── history.db              │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│  lipetsk-gas-monitor-web (2 replicas, RollingUpdate)    │
+│  ┌─────────┐  ┌─────────┐                               │
+│  │  web    │  │  web    │  ← ingress / service          │
+│  └────┬────┘  └────┬────┘                               │
+│       └──────┬─────┘                                    │
+│              │ PVC /app/data (history.db, read + write)  │
+│  ┌───────────┴───────────┐                              │
+│  │ lipetsk-gas-monitor-  │                              │
+│  │ collector (1 replica) │                              │
+│  └───────────────────────┘                              │
+└─────────────────────────────────────────────────────────┘
           │
     Ingress gas.qantrix.ru
 ```
 
-Один pod / два контейнера — единственный writer в SQLite, без гонок между pod'ами.
+Web: **RollingUpdate** (`maxUnavailable: 0`) — бесшовный деплoy UI.  
+Collector: **Recreate** — перезапуск фона не роняет сайт.
