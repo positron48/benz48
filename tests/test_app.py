@@ -151,6 +151,14 @@ def test_api_endpoints(tmp_path):
     assert summary.status_code == 200
     assert summary.json()[0]["total"] == 24
 
+    lipetsk = client.get("/api/summary", params={"regions": ["lipetsk_city"]})
+    assert lipetsk.status_code == 200
+    assert lipetsk.json()[0]["total"] == 24
+
+    yelets = client.get("/api/summary", params={"regions": ["yelets"]})
+    assert yelets.status_code == 200
+    assert yelets.json() == []
+
     fuel_since = client.get("/api/fuel-since")
     assert fuel_since.status_code == 200
     assert len(fuel_since.json()) == 24

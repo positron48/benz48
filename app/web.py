@@ -89,20 +89,18 @@ def summary(
     response: Response,
     date_from: str | None = Query(default=None, alias="from"),
     date_to: str | None = Query(default=None, alias="to"),
-    station_ids: list[str] | None = Query(default=None),
-    brands: list[str] | None = Query(default=None),
+    regions: list[str] | None = Query(default=None),
 ) -> list[dict[str, Any]]:
     key = build_cache_key(
         "summary",
         date_from=date_from,
         date_to=date_to,
-        station_ids=station_ids,
-        brands=brands,
+        regions=regions,
     )
     return _cached(
         response,
         key,
-        lambda: storage.query_summary(date_from, date_to, station_ids, brands),
+        lambda: storage.query_summary(date_from, date_to, regions=regions),
     )
 
 

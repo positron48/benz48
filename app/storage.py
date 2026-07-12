@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from app.config import settings, save_snapshot_files_enabled
 from app.parser import StationRecord
-from app.regions import build_region_meta, region_group_for_district
+from app.regions import build_region_meta, districts_for_regions, region_group_for_district
 
 logger = logging.getLogger(__name__)
 MOSCOW = ZoneInfo(settings.timezone)
@@ -425,6 +425,7 @@ class Storage:
         date_to: str | None = None,
         station_ids: list[str] | None = None,
         brands: list[str] | None = None,
+        regions: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         clauses = ["1=1"]
         params: list[Any] = []
@@ -443,6 +444,14 @@ class Storage:
             placeholders = ",".join("?" for _ in brands)
             clauses.append(f"brand IN ({placeholders})")
             params.extend(brands)
+        if regions:
+            districts = districts_for_regions(regions)
+            if districts:
+                placeholders = ",".join("?" for _ in districts)
+                clauses.append(f"district IN ({placeholders})")
+                params.extend(districts)
+            else:
+                return []
 
         query = f"""
             SELECT collected_at,

@@ -925,6 +925,7 @@
       <article class="panel share-chart-panel">
         <div class="chart-panel-header card-head">
           <h2 class="panel-title">Доля АЗС с топливом</h2>
+          <p class="card-desc" id="summaryChartDesc">По всей области</p>
         </div>
         <div id="summaryChart" class="chart"></div>
       </article>
@@ -1310,16 +1311,41 @@
 
     function onFiltersChanged() {
       syncFiltersToUrl();
-      renderAll();
+      updateSummaryChartDesc();
+      reloadSummary().then(() => renderAll());
     }
 
-    function buildDateQuery() {
+    let lastSummaryQuery = "";
+
+    function buildSummaryQuery() {
       const params = new URLSearchParams();
       const from = fromLocalInputValue(document.getElementById("from").value);
       const to = fromLocalInputValue(document.getElementById("to").value);
       if (from) params.set("from", from);
       if (to) params.set("to", to);
+      for (const region of selectedValues("regions")) params.append("regions", region);
       return params.toString();
+    }
+
+    function updateSummaryChartDesc() {
+      const desc = document.getElementById("summaryChartDesc");
+      const regions = selectedValues("regions");
+      if (!regions.length) {
+        desc.textContent = "По всей области · только фильтр региона";
+        return;
+      }
+      const labels = regions.map((id) => {
+        const group = (meta.region_groups || []).find((g) => g.id === id);
+        return group ? group.label : id;
+      });
+      desc.textContent = `Регион: ${labels.join(", ")} · без других фильтров`;
+    }
+
+    async function reloadSummary() {
+      const query = buildSummaryQuery();
+      if (query === lastSummaryQuery) return;
+      lastSummaryQuery = query;
+      cache.summary = await fetchJson(`/api/summary?${query}`);
     }
 
     function buildQuery(includeSearch = false) {
@@ -2080,7 +2106,6 @@
       const activeIds = new Set(getActiveStationIds());
       const timeseries = filterByStations(cache.timeseries);
       const fuelSince = filterByStations(cache.fuelSince);
-      const globalSummary = cache.summary || [];
 
       const latest = cache.latest
         ? {
@@ -2096,7 +2121,7 @@
       renderLatestTable(latest);
       renderFuelCharts(timeseries);
       renderQueueChart(timeseries);
-      renderSummaryChart(globalSummary);
+      renderSummaryChart(cache.summary || []);
       bindLegendBulkActions("fuelHideAll", "fuelShowAll", stationsFromTimeseries(timeseries), fuelHiddenStations);
       bindLegendBulkActions("queueHideAll", "queueShowAll", stationsFromTimeseries(timeseries), queueHiddenStations);
     }
@@ -2120,17 +2145,19 @@
 
     async function loadData() {
       const query = buildQuery();
-      const dateQuery = buildDateQuery();
+      const summaryQuery = buildSummaryQuery();
       const [latest, timeseries, fuelSince, summary] = await Promise.all([
         fetchJson("/api/latest"),
         fetchJson(`/api/timeseries?${query}`),
         fetchJson(`/api/fuel-since?${query}`),
-        fetchJson(`/api/summary?${dateQuery}`),
+        fetchJson(`/api/summary?${summaryQuery}`),
       ]);
 
+      lastSummaryQuery = summaryQuery;
       cache = { latest, timeseries, summary, fuelSince };
 
       document.getElementById("subtitle").textContent = formatSubtitle();
+      updateSummaryChartDesc();
 
       renderAll();
     }
