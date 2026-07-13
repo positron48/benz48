@@ -128,6 +128,8 @@ def bootstrap_database_if_needed(storage: Storage | None = None) -> bool:
                         snapshots,
                         current,
                     )
+                    # Installed DB may predate read-model tables — migrate + backfill.
+                    storage._init_db()
                     return True
                 except Exception:
                     logger.exception("Bootstrap failed for %s", candidate)

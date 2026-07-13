@@ -1316,19 +1316,20 @@
 
     const OFFLINE_BREAK_THRESHOLD_MS = 4 * 60 * 60 * 1000;
 
-    function stationTimeseriesRows(stationId) {
-      return (cache.timeseries || []).filter((row) => row.station_id === stationId);
+    function stationWorkingSegments(stationId) {
+      return (cache.timeseries || [])
+        .filter((row) => row.station_id === stationId && row.metric === "is_working")
+        .sort((a, b) => a.start_at.localeCompare(b.start_at));
     }
 
-    function offlineSinceAt(rows, untilMs) {
-      const ordered = [...rows]
-        .filter((row) => new Date(row.collected_at).getTime() <= untilMs)
-        .sort((a, b) => a.collected_at.localeCompare(b.collected_at));
+    function offlineSinceAt(segments, untilMs) {
       let since = null;
-      for (const row of ordered) {
-        if (row.is_working === "no") {
-          if (since === null) since = row.collected_at;
-        } else if (row.is_working === "yes") {
+      for (const segment of segments) {
+        const startMs = new Date(segment.start_at).getTime();
+        if (startMs > untilMs) break;
+        if (segment.value === "no") {
+          if (since === null) since = segment.start_at;
+        } else if (segment.value === "yes") {
           since = null;
         }
       }
@@ -1347,9 +1348,9 @@
     function offlineLabelForStation(stationId, untilIso) {
       const until = untilIso || cache.latest?.collected_at;
       if (!until) return "не работает";
-      const rows = stationTimeseriesRows(stationId);
-      if (!rows.length) return "не работает";
-      const since = offlineSinceAt(rows, new Date(until).getTime());
+      const segments = stationWorkingSegments(stationId);
+      if (!segments.length) return "не работает";
+      const since = offlineSinceAt(segments, new Date(until).getTime());
       return offlineDurationText(since, until);
     }
 
@@ -1402,15 +1403,11 @@
       return new Date(iso).toLocaleString("ru-RU");
     }
 
-    function fuelNumeric(value) {
+    function fuelSegmentStatus(value) {
+      if (value === "offline") return 2;
       if (value === "yes") return 1;
       if (value === "no") return 0;
       return null;
-    }
-
-    function fuelChartStatus(row, fuelKey) {
-      if (row.is_working === "no") return 2;
-      return fuelNumeric(row[fuelKey]);
     }
 
     function queueNumeric(value) {
@@ -1754,20 +1751,18 @@
         </table>`;
     }
 
-    function stationsFromTimeseries(timeseries) {
+    function stationsFromTimeseries(segments) {
       const seen = new Map();
-      for (const row of timeseries) {
-        if (!seen.has(row.station_id)) {
-          seen.set(row.station_id, {
-            station_id: row.station_id,
-            brand: row.brand,
-            address: row.address,
-            name: row.name,
-            is_working: row.is_working,
-          });
-        } else {
-          seen.get(row.station_id).is_working = row.is_working;
-        }
+      for (const row of segments) {
+        if (seen.has(row.station_id)) continue;
+        const latest = getCurrentStationState(row.station_id);
+        seen.set(row.station_id, {
+          station_id: row.station_id,
+          brand: row.brand,
+          address: row.address,
+          name: row.name,
+          is_working: latest?.is_working ?? null,
+        });
       }
       return [...seen.values()].sort((a, b) =>
         `${a.brand} ${a.address}`.localeCompare(`${b.brand} ${b.address}`, "ru")
@@ -1901,11 +1896,19 @@
       return Math.min(600, Math.max(200, stationCount * 32 + 52));
     }
 
-    function chartTimeBounds(timeseries) {
-      const timestamps = [...new Set(timeseries.map((row) => row.collected_at))].sort();
-      if (!timestamps.length) return null;
-      const minMs = new Date(timestamps[0]).getTime();
-      const maxMs = new Date(timestamps[timestamps.length - 1]).getTime();
+    function chartTimeBounds(segments) {
+      let minMs = Infinity;
+      let maxMs = -Infinity;
+      const fallbackMax = cache.latest?.collected_at
+        ? new Date(cache.latest.collected_at).getTime()
+        : Date.now();
+      for (const segment of segments) {
+        const start = new Date(segment.start_at).getTime();
+        const end = segment.end_at ? new Date(segment.end_at).getTime() : fallbackMax;
+        if (start < minMs) minMs = start;
+        if (end > maxMs) maxMs = end;
+      }
+      if (!Number.isFinite(minMs) || !Number.isFinite(maxMs)) return null;
       const spanMs = Math.max(maxMs - minMs, 60 * 60 * 1000);
       const padMs = Math.max(spanMs * 0.05, 30 * 60 * 1000);
       return { min: minMs - padMs, max: maxMs + padMs };
@@ -1954,77 +1957,28 @@
     const fuelBarRenderItem = makeSwimlaneBarRenderItem(fuelStatusColor, [2]);
     const queueBarRenderItem = makeSwimlaneBarRenderItem(queueStatusColor, [QUEUE_NO_DATA]);
 
-    function buildTimelineSegments(rows, statusForRow, rangeEndMs) {
-      if (!rows.length) return [];
-      const points = rows.map((row) => [
-        new Date(row.collected_at).getTime(),
-        statusForRow(row),
-      ]);
-
-      const changes = [];
-      for (let i = 0; i < points.length; i++) {
-        const [time, status] = points[i];
-        if (i === 0 || status !== points[i - 1][1]) {
-          changes.push([time, status]);
-        }
-      }
-
-      const segments = [];
-      for (let i = 0; i < changes.length; i++) {
-        const [start, status] = changes[i];
-        const end = i + 1 < changes.length ? changes[i + 1][0] : rangeEndMs;
-        if (end > start) segments.push({ start, end, status });
-      }
-      return segments;
+    function clipSegmentRange(segment, rangeEndMs) {
+      const start = new Date(segment.start_at).getTime();
+      const end = segment.end_at ? new Date(segment.end_at).getTime() : rangeEndMs;
+      if (!(end > start)) return null;
+      return { start, end };
     }
 
-    function buildFuelSegmentsForStation(timeseries, stationId, fuelKey, rangeEndMs) {
-      const rows = timeseries
-        .filter((row) => row.station_id === stationId)
-        .sort((a, b) => a.collected_at.localeCompare(b.collected_at));
-      let lastKnownFuelStatus = null;
-
-      function statusForRow(row) {
-        const status = fuelChartStatus(row, fuelKey);
-        if (status === 2) {
-          return status;
-        }
-        if (status !== null) {
-          lastKnownFuelStatus = status;
-          return status;
-        }
-        if (row.is_working !== "no" && lastKnownFuelStatus !== null) {
-          return lastKnownFuelStatus;
-        }
-        return null;
-      }
-
-      return buildTimelineSegments(rows, statusForRow, rangeEndMs).filter(
-        (segment) => segment.status !== null,
-      );
-    }
-
-    function buildQueueSegmentsForStation(timeseries, stationId, rangeEndMs) {
-      const rows = timeseries
-        .filter((row) => row.station_id === stationId)
-        .sort((a, b) => a.collected_at.localeCompare(b.collected_at));
-      return buildTimelineSegments(rows, (row) => queueChartStatus(row.queue), rangeEndMs);
-    }
-
-    function buildFuelBarSeriesData(visibleStations, timeseries, fuelKey, timeBounds) {
+    function buildFuelBarSeriesData(visibleStations, segments, fuelKey, timeBounds) {
       const rangeEndMs = timeBounds.max;
       const data = [];
       visibleStations.forEach((station, listIndex) => {
         const laneIndex = visibleStations.length - 1 - listIndex;
-        const segments = buildFuelSegmentsForStation(
-          timeseries,
-          station.station_id,
-          fuelKey,
-          rangeEndMs,
-        );
         for (const segment of segments) {
+          if (segment.station_id !== station.station_id || segment.metric !== fuelKey) {
+            continue;
+          }
+          const status = fuelSegmentStatus(segment.value);
+          if (status === null) continue;
+          const range = clipSegmentRange(segment, rangeEndMs);
+          if (!range) continue;
           data.push({
-            value: [segment.start, segment.end, laneIndex, segment.status],
+            value: [range.start, range.end, laneIndex, status],
             station,
             fuelKey,
           });
@@ -2033,19 +1987,20 @@
       return data;
     }
 
-    function buildQueueBarSeriesData(visibleStations, timeseries, timeBounds) {
+    function buildQueueBarSeriesData(visibleStations, segments, timeBounds) {
       const rangeEndMs = timeBounds.max;
       const data = [];
       visibleStations.forEach((station, listIndex) => {
         const laneIndex = visibleStations.length - 1 - listIndex;
-        const segments = buildQueueSegmentsForStation(
-          timeseries,
-          station.station_id,
-          rangeEndMs,
-        );
         for (const segment of segments) {
+          if (segment.station_id !== station.station_id || segment.metric !== "queue") {
+            continue;
+          }
+          const status = queueChartStatus(segment.value);
+          const range = clipSegmentRange(segment, rangeEndMs);
+          if (!range) continue;
           data.push({
-            value: [segment.start, segment.end, laneIndex, segment.status],
+            value: [range.start, range.end, laneIndex, status],
             station,
           });
         }

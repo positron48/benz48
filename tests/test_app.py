@@ -306,7 +306,11 @@ def test_api_endpoints(tmp_path):
 
     timeseries = client.get("/api/timeseries")
     assert timeseries.status_code == 200
-    assert len(timeseries.json()) == 24
+    segments = timeseries.json()
+    assert len(segments) >= 24
+    assert {"station_id", "metric", "start_at", "value"} <= set(segments[0])
+    assert {row["station_id"] for row in segments}  # non-empty station set
+    assert len({row["station_id"] for row in segments}) == 24
 
     summary = client.get("/api/summary")
     assert summary.status_code == 200
@@ -358,6 +362,98 @@ def test_api_cache(tmp_path, monkeypatch):
     assert second.headers["X-Cache"] == "HIT"
     assert first.headers["Cache-Control"] == "public, max-age=120"
     assert first.json() == second.json()
+
+
+def test_build_cache_key_buckets_timestamps() -> None:
+    from app.cache import build_cache_key
+
+    key_a = build_cache_key(
+        "timeseries",
+        date_from="2026-07-12T11:12:37.000Z",
+        date_to="2026-07-14T11:14:01.500Z",
+    )
+    key_b = build_cache_key(
+        "timeseries",
+        date_from="2026-07-12T11:14:59.000Z",
+        date_to="2026-07-14T11:14:40.000Z",
+    )
+    assert key_a == key_b
+    key_c = build_cache_key(
+        "timeseries",
+        date_from="2026-07-12T11:20:00.000Z",
+        date_to="2026-07-14T11:14:40.000Z",
+    )
+    assert key_c != key_a
+
+
+def test_read_model_segments_and_fuel_since(tmp_path) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    stations = parse_reports_html(html)
+    storage = Storage(tmp_path)
+
+    first_at = datetime(2026, 7, 12, 8, 0, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    second_at = datetime(2026, 7, 12, 12, 59, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    storage.save_snapshot(stations, "https://example.test", first_at)
+
+    segments = storage.query_timeseries()
+    assert any(row["metric"] == "fuel_95" for row in segments)
+    assert all(row["end_at"] is None for row in segments if row["metric"] == "fuel_95")
+
+    outage_stations = []
+    for station in stations:
+        data = station.to_dict()
+        if data["brand"] == "ЛУКОЙЛ" and "Катукова, 49" in data["address"]:
+            data["is_working"] = "no"
+            data["fuel_92"] = None
+            data["fuel_95"] = None
+            data["fuel_diesel"] = None
+            data["queue"] = None
+        outage_stations.append(StationRecord(**data))
+    storage.save_snapshot(outage_stations, "https://example.test", second_at)
+
+    target = next(
+        row
+        for row in storage.query_fuel_since()
+        if row["brand"] == "ЛУКОЙЛ" and "Катукова, 49" in row["address"]
+    )
+    assert target["is_working"] == "no"
+    assert target["fuel_95"] == "yes"
+    assert target["fuel_95_since"] == first_at.isoformat()
+
+    fuel_segments = [
+        row
+        for row in storage.query_timeseries()
+        if row["brand"] == "ЛУКОЙЛ"
+        and "Катукова, 49" in row["address"]
+        and row["metric"] == "fuel_95"
+    ]
+    assert len(fuel_segments) == 2
+    assert fuel_segments[0]["value"] == "yes"
+    assert fuel_segments[0]["end_at"] == second_at.isoformat()
+    assert fuel_segments[1]["value"] == "offline"
+    assert fuel_segments[1]["end_at"] is None
+
+
+def test_rebuild_read_models_from_observations(tmp_path) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    stations = parse_reports_html(html)
+    storage = Storage(tmp_path)
+    storage.save_snapshot(
+        stations,
+        "https://example.test",
+        datetime(2026, 7, 12, 8, 0, 0, tzinfo=ZoneInfo("Europe/Moscow")),
+    )
+
+    with storage._connect() as conn:
+        conn.execute("DELETE FROM station_state")
+        conn.execute("DELETE FROM timeline_segments")
+        conn.execute("DELETE FROM summary_points")
+        conn.commit()
+
+    storage.rebuild_read_models()
+    assert len(storage.query_fuel_since()) == 24
+    assert storage.query_summary()[0]["total"] == 24
+    assert len(storage.query_timeseries()) >= 24
 
 
 def test_bootstrap_from_gzip(tmp_path, monkeypatch):

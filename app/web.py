@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,8 @@ from app.storage import Storage
 
 storage = Storage()
 api_cache = TTLCache(settings.api_cache_seconds)
+_cache_locks_guard = threading.Lock()
+_cache_locks: dict[str, threading.Lock] = {}
 static_dir = Path(__file__).parent / "static"
 
 app = FastAPI(title="Lipetsk Gas Monitor")
@@ -26,15 +29,30 @@ def _set_cache_headers(response: Response, *, hit: bool) -> None:
     response.headers["X-Cache"] = "HIT" if hit else "MISS"
 
 
+def _lock_for(key: str) -> threading.Lock:
+    with _cache_locks_guard:
+        lock = _cache_locks.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _cache_locks[key] = lock
+        return lock
+
+
 def _cached(response: Response, key: str, loader: Callable[[], Any]) -> Any:
     cached = api_cache.get(key)
     if cached is not None:
         _set_cache_headers(response, hit=True)
         return cached
-    data = loader()
-    api_cache.set(key, data)
-    _set_cache_headers(response, hit=False)
-    return data
+
+    with _lock_for(key):
+        cached = api_cache.get(key)
+        if cached is not None:
+            _set_cache_headers(response, hit=True)
+            return cached
+        data = loader()
+        api_cache.set(key, data)
+        _set_cache_headers(response, hit=False)
+        return data
 
 
 @app.on_event("startup")

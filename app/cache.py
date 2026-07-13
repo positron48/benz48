@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import re
 import time
+from datetime import datetime
 from typing import Any
+
+
+_ISO_TIMESTAMP_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$"
+)
 
 
 class TTLCache:
@@ -34,12 +41,31 @@ class TTLCache:
         self._store.clear()
 
 
+def normalize_cache_value(value: Any, *, bucket_seconds: int = 300) -> Any:
+    """Floor ISO timestamps to collect-interval buckets so sliding ranges share a key."""
+    if isinstance(value, list):
+        return [normalize_cache_value(item, bucket_seconds=bucket_seconds) for item in value]
+    if not isinstance(value, str) or not _ISO_TIMESTAMP_RE.match(value):
+        return value
+    try:
+        normalized = value.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        return value
+    if dt.tzinfo is None:
+        return value
+    bucket = max(1, bucket_seconds)
+    floored = int(dt.timestamp()) // bucket * bucket
+    return str(floored)
+
+
 def build_cache_key(prefix: str, **params: Any) -> str:
     parts = [prefix]
     for name in sorted(params):
         value = params[name]
         if value is None:
             continue
+        value = normalize_cache_value(value)
         if isinstance(value, list):
             if not value:
                 continue
