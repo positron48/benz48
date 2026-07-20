@@ -791,25 +791,26 @@ class Storage:
             if not row:
                 return None
 
+            # Only stations seen in the latest scrape — station_state keeps
+            # historical rows that would inflate yes/total past 100%.
             state_rows = conn.execute(
                 """
                 SELECT station_id, brand, name, district, address, is_working,
                        fuel_92, fuel_95, fuel_diesel, queue, reason,
                        expected_working_at, last_report_at, updated_at AS collected_at
                 FROM station_state
+                WHERE updated_at = ?
                 ORDER BY brand, name
-                """
+                """,
+                (row["collected_at"],),
             ).fetchall()
 
         if state_rows:
-            stations = [
-                {**dict(station), "collected_at": row["collected_at"]}
-                for station in state_rows
-            ]
+            stations = [dict(station) for station in state_rows]
             return {
                 "collected_at": row["collected_at"],
                 "filepath": row["filepath"],
-                "station_count": row["station_count"],
+                "station_count": len(stations),
                 "stations": stations,
             }
 
@@ -838,7 +839,7 @@ class Storage:
         return {
             "collected_at": row["collected_at"],
             "filepath": row["filepath"],
-            "station_count": row["station_count"],
+            "station_count": len(stations),
             "stations": stations,
         }
 

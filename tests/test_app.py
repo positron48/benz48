@@ -128,6 +128,25 @@ def test_carry_forward_station_fuels_on_save() -> None:
     assert station["fuel_diesel"] == "no"
 
 
+def test_get_latest_excludes_stale_station_state(tmp_path) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    stations = parse_reports_html(html)
+    storage = Storage(tmp_path)
+
+    first_at = datetime(2026, 7, 12, 8, 0, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    second_at = datetime(2026, 7, 12, 8, 5, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+
+    storage.save_snapshot(stations, "https://example.test", first_at)
+    # Second scrape loses one station — it must not inflate latest yes/total.
+    storage.save_snapshot(stations[1:], "https://example.test", second_at)
+
+    latest = storage.get_latest()
+    assert latest is not None
+    assert latest["station_count"] == len(latest["stations"]) == 23
+    dropped_id = stations[0].id
+    assert all(s["station_id"] != dropped_id for s in latest["stations"])
+
+
 def test_get_latest_enriches_fuel_during_outage(tmp_path) -> None:
     html = FIXTURE.read_text(encoding="utf-8")
     stations = parse_reports_html(html)

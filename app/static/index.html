@@ -1574,16 +1574,15 @@
       document.getElementById("filterNote").innerHTML = chips.join("");
     }
 
-    function renderStats() {
+    function renderStats(latest) {
       const stats = document.getElementById("stats");
-      const latest = cache.latest;
       if (!latest || !latest.stations?.length) {
         stats.innerHTML = '<div class="stats-bar__inner stats-bar__inner--empty">Ожидание данных</div>';
         return;
       }
 
       const stations = latest.stations;
-      const total = latest.station_count || stations.length;
+      const total = stations.length;
       const countYes = (key) => stations.filter((s) => s[key] === "yes").length;
       const pct = (value) => (total ? Math.round((value / total) * 100) : 0);
       const fuels = [
@@ -2279,7 +2278,7 @@
         : null;
 
       renderFilterNote(activeIds.size);
-      renderStats();
+      renderStats(latest);
       renderFuelSinceTable(fuelSince);
       renderLatestTable(latest);
       renderFuelCharts(timeseries);
