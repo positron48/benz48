@@ -656,6 +656,35 @@
     .pill-no { color: var(--red); }
     .pill-warn { color: #f7ad32; }
     .pill-off { color: var(--text-muted); }
+    .pill-hatch {
+      padding-left: 2px;
+    }
+    .pill-hatch::before {
+      content: "";
+      width: 14px;
+      height: 10px;
+      border-radius: 2px;
+      flex-shrink: 0;
+      box-sizing: border-box;
+    }
+    .pill-hatch-no95::before {
+      border: 1px solid rgba(255, 98, 95, 0.85);
+      background:
+        repeating-linear-gradient(
+          -45deg,
+          rgba(255, 98, 95, 0.9) 0 1px,
+          transparent 1px 4px
+        );
+    }
+    .pill-hatch-offline::before {
+      border: 1px solid rgba(168, 180, 198, 0.9);
+      background:
+        repeating-linear-gradient(
+          45deg,
+          rgba(168, 180, 198, 0.95) 0 1px,
+          transparent 1px 4px
+        );
+    }
     .chart { width: 100%; height: 360px; min-width: 0; overflow: visible; }
     .chart-compact { width: 100%; min-height: 200px; height: auto; overflow: visible; }
     .share-chart-panel {
@@ -1057,6 +1086,8 @@
             <span class="pill pill-warn">30–60</span>
             <span class="pill pill-no">60+</span>
             <span class="pill pill-off">нет данных</span>
+            <span class="pill pill-hatch pill-hatch-no95">нет АИ-95</span>
+            <span class="pill pill-hatch pill-hatch-offline">не работает</span>
           </div>
         </div>
         <div class="availability-layout">
@@ -1895,19 +1926,44 @@
       return Math.min(600, Math.max(200, stationCount * 32 + 52));
     }
 
-    function chartTimeBounds(segments) {
-      let minMs = Infinity;
-      let maxMs = -Infinity;
-      const fallbackMax = cache.latest?.collected_at
+    function selectedTimeWindowMs() {
+      const fromVal = document.getElementById("from").value;
+      const toVal = document.getElementById("to").value;
+      return {
+        fromMs: fromVal ? new Date(fromVal).getTime() : null,
+        toMs: toVal ? new Date(toVal).getTime() : null,
+      };
+    }
+
+    function chartDataEndMs() {
+      return cache.latest?.collected_at
         ? new Date(cache.latest.collected_at).getTime()
         : Date.now();
+    }
+
+    function chartTimeBounds(segments) {
+      const { fromMs, toMs } = selectedTimeWindowMs();
+      if (fromMs != null && toMs != null && toMs > fromMs) {
+        return { min: fromMs, max: toMs };
+      }
+
+      let minMs = Infinity;
+      let maxMs = -Infinity;
+      const fallbackMax = chartDataEndMs();
       for (const segment of segments) {
-        const start = new Date(segment.start_at).getTime();
-        const end = segment.end_at ? new Date(segment.end_at).getTime() : fallbackMax;
+        const start = new Date(segment.start_at || segment.collected_at).getTime();
+        const end = segment.end_at
+          ? new Date(segment.end_at).getTime()
+          : (segment.collected_at ? new Date(segment.collected_at).getTime() : fallbackMax);
         if (start < minMs) minMs = start;
         if (end > maxMs) maxMs = end;
       }
+      if (fromMs != null) minMs = Number.isFinite(minMs) ? Math.max(minMs, fromMs) : fromMs;
+      if (toMs != null) maxMs = Number.isFinite(maxMs) ? Math.min(maxMs, toMs) : toMs;
       if (!Number.isFinite(minMs) || !Number.isFinite(maxMs)) return null;
+      if (fromMs != null || toMs != null) {
+        return { min: minMs, max: Math.max(maxMs, minMs + 60 * 1000) };
+      }
       const spanMs = Math.max(maxMs - minMs, 60 * 60 * 1000);
       const padMs = Math.max(spanMs * 0.05, 30 * 60 * 1000);
       return { min: minMs - padMs, max: maxMs + padMs };
@@ -1956,15 +2012,83 @@
     const fuelBarRenderItem = makeSwimlaneBarRenderItem(fuelStatusColor, [2]);
     const queueBarRenderItem = makeSwimlaneBarRenderItem(queueStatusColor, [QUEUE_NO_DATA]);
 
-    function clipSegmentRange(segment, rangeEndMs) {
+    function swimlaneBarGeometry(api) {
+      const start = api.value(0);
+      const end = api.value(1);
+      const lane = api.value(2);
+      const y = lane + 0.5;
+      const startPoint = api.coord([start, y]);
+      const endPoint = api.coord([end, y]);
+      const laneHeight = api.size([0, 1])[1];
+      const barHeight = Math.max(12, Math.min(20, laneHeight * 0.68));
+      return {
+        x: startPoint[0],
+        y: startPoint[1] - barHeight / 2,
+        width: Math.max(endPoint[0] - startPoint[0], 1),
+        height: barHeight,
+      };
+    }
+
+    function makeHatchOverlayRenderItem(strokeColor, fillColor, direction) {
+      const step = 5;
+      return function hatchOverlayRenderItem(params, api) {
+        const box = swimlaneBarGeometry(api);
+        const { x, y, width, height } = box;
+        const lines = [];
+        const diag = direction === "forward" ? 1 : -1;
+        for (let i = -height; i <= width + height; i += step) {
+          const x1 = x + i;
+          const y1 = diag > 0 ? y + height : y;
+          const x2 = x + i + height;
+          const y2 = diag > 0 ? y : y + height;
+          lines.push({
+            type: "line",
+            shape: { x1, y1, x2, y2 },
+            style: { stroke: strokeColor, lineWidth: 1, opacity: 0.9 },
+            silent: true,
+          });
+        }
+        return {
+          type: "group",
+          children: [
+            {
+              type: "rect",
+              shape: { x, y, width, height },
+              style: { fill: fillColor, opacity: 0.22 },
+            },
+            {
+              type: "group",
+              clipPath: { type: "rect", shape: { x, y, width, height } },
+              children: lines,
+              silent: true,
+            },
+          ],
+        };
+      };
+    }
+
+    const noFuel95HatchRenderItem = makeHatchOverlayRenderItem(
+      "rgba(255, 98, 95, 0.95)",
+      "rgba(255, 98, 95, 0.35)",
+      "backward",
+    );
+    const offlineHatchRenderItem = makeHatchOverlayRenderItem(
+      "rgba(168, 180, 198, 0.95)",
+      "rgba(120, 140, 165, 0.4)",
+      "forward",
+    );
+
+    function clipSegmentRange(segment, timeBounds, dataEndMs) {
       const start = new Date(segment.start_at).getTime();
-      const end = segment.end_at ? new Date(segment.end_at).getTime() : rangeEndMs;
-      if (!(end > start)) return null;
-      return { start, end };
+      const end = segment.end_at ? new Date(segment.end_at).getTime() : dataEndMs;
+      const clippedStart = Math.max(start, timeBounds.min);
+      const clippedEnd = Math.min(end, timeBounds.max);
+      if (!(clippedEnd > clippedStart)) return null;
+      return { start: clippedStart, end: clippedEnd };
     }
 
     function buildFuelBarSeriesData(visibleStations, segments, fuelKey, timeBounds) {
-      const rangeEndMs = timeBounds.max;
+      const dataEndMs = chartDataEndMs();
       const data = [];
       visibleStations.forEach((station, listIndex) => {
         const laneIndex = visibleStations.length - 1 - listIndex;
@@ -1974,7 +2098,7 @@
           }
           const status = fuelSegmentStatus(segment.value);
           if (status === null) continue;
-          const range = clipSegmentRange(segment, rangeEndMs);
+          const range = clipSegmentRange(segment, timeBounds, dataEndMs);
           if (!range) continue;
           data.push({
             value: [range.start, range.end, laneIndex, status],
@@ -1987,7 +2111,7 @@
     }
 
     function buildQueueBarSeriesData(visibleStations, segments, timeBounds) {
-      const rangeEndMs = timeBounds.max;
+      const dataEndMs = chartDataEndMs();
       const data = [];
       visibleStations.forEach((station, listIndex) => {
         const laneIndex = visibleStations.length - 1 - listIndex;
@@ -1996,11 +2120,33 @@
             continue;
           }
           const status = queueChartStatus(segment.value);
-          const range = clipSegmentRange(segment, rangeEndMs);
+          const range = clipSegmentRange(segment, timeBounds, dataEndMs);
           if (!range) continue;
           data.push({
             value: [range.start, range.end, laneIndex, status],
             station,
+          });
+        }
+      });
+      return data;
+    }
+
+    function buildQueueOverlaySeriesData(visibleStations, segments, metric, matchValue, timeBounds) {
+      const dataEndMs = chartDataEndMs();
+      const data = [];
+      visibleStations.forEach((station, listIndex) => {
+        const laneIndex = visibleStations.length - 1 - listIndex;
+        for (const segment of segments) {
+          if (segment.station_id !== station.station_id || segment.metric !== metric) {
+            continue;
+          }
+          if (segment.value !== matchValue) continue;
+          const range = clipSegmentRange(segment, timeBounds, dataEndMs);
+          if (!range) continue;
+          data.push({
+            value: [range.start, range.end, laneIndex],
+            station,
+            overlay: metric,
           });
         }
       });
@@ -2047,6 +2193,22 @@
       }
 
       const timeBounds = chartTimeBounds(timeseries);
+      if (!timeBounds) {
+        chart.setOption({
+          title: {
+            text: "Нет данных за период",
+            left: "center",
+            top: "center",
+            textStyle: { color: CHART_THEME.emptyText, fontSize: 13, fontWeight: 400 },
+          },
+          backgroundColor: "transparent",
+          xAxis: { show: false },
+          yAxis: { show: false },
+          series: [],
+        }, true);
+        chart.resize();
+        return;
+      }
       const barData = buildFuelBarSeriesData(visibleStations, timeseries, fuelKey, timeBounds);
 
       chart.setOption({
@@ -2138,7 +2300,30 @@
       }
 
       const timeBounds = chartTimeBounds(timeseries);
+      if (!timeBounds) {
+        queueChart.setOption({
+          title: {
+            text: "Нет данных за период",
+            left: "center",
+            top: "center",
+            textStyle: { color: CHART_THEME.emptyText, fontSize: 13, fontWeight: 400 },
+          },
+          backgroundColor: "transparent",
+          xAxis: { show: false },
+          yAxis: { show: false },
+          series: [],
+        }, true);
+        queueChart.resize();
+        return;
+      }
+
       const barData = buildQueueBarSeriesData(visibleStations, timeseries, timeBounds);
+      const noFuel95Data = buildQueueOverlaySeriesData(
+        visibleStations, timeseries, "fuel_95", "no", timeBounds,
+      );
+      const offlineData = buildQueueOverlaySeriesData(
+        visibleStations, timeseries, "is_working", "no", timeBounds,
+      );
 
       queueChart.setOption({
         backgroundColor: "transparent",
@@ -2149,8 +2334,22 @@
             const segment = params.data;
             if (!segment?.station) return "";
             const [start] = segment.value;
-            const status = segment.value[3];
             const stationLabel = `${segment.station.brand} — ${segment.station.address}`;
+            if (segment.overlay === "fuel_95") {
+              return [
+                "<strong>Нет АИ-95</strong>",
+                stationLabel,
+                formatDateTime(new Date(start).toISOString()),
+              ].join("<br>");
+            }
+            if (segment.overlay === "is_working") {
+              return [
+                "<strong>Не работает</strong>",
+                stationLabel,
+                formatDateTime(new Date(start).toISOString()),
+              ].join("<br>");
+            }
+            const status = segment.value[3];
             return [
               "<strong>Очередь</strong>",
               stationLabel,
@@ -2163,14 +2362,35 @@
         grid: swimlaneGrid(),
         xAxis: buildTimeXAxis(timeBounds),
         yAxis: buildSwimlaneYAxis(laneLabels),
-        series: [{
-          name: "Очередь",
-          type: "custom",
-          renderItem: queueBarRenderItem,
-          clip: true,
-          encode: { x: [0, 1], y: 2 },
-          data: barData,
-        }],
+        series: [
+          {
+            name: "Очередь",
+            type: "custom",
+            renderItem: queueBarRenderItem,
+            clip: true,
+            z: 1,
+            encode: { x: [0, 1], y: 2 },
+            data: barData,
+          },
+          {
+            name: "Нет АИ-95",
+            type: "custom",
+            renderItem: noFuel95HatchRenderItem,
+            clip: true,
+            z: 2,
+            encode: { x: [0, 1], y: 2 },
+            data: noFuel95Data,
+          },
+          {
+            name: "Не работает",
+            type: "custom",
+            renderItem: offlineHatchRenderItem,
+            clip: true,
+            z: 3,
+            encode: { x: [0, 1], y: 2 },
+            data: offlineData,
+          },
+        ],
       }, true);
       queueChart.resize();
     }
