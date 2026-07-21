@@ -377,8 +377,9 @@
     }
     .period-chip {
       width: auto;
-      height: 30px;
-      padding: 0 12px;
+      height: auto;
+      min-height: 30px;
+      padding: 6px 12px;
       border-radius: 15px;
       color: #9cabbe;
       background: rgba(255, 255, 255, 0.025);
@@ -386,6 +387,7 @@
       font-size: 12px;
       font-weight: 600;
       box-shadow: none;
+      white-space: nowrap;
     }
     .period-chip:hover {
       color: #dce5f2;
@@ -667,11 +669,12 @@
       flex-shrink: 0;
       box-sizing: border-box;
     }
+    /* CSS 45deg → полосы «\», -45deg → «/» — как на графике (backward / forward). */
     .pill-hatch-no95::before {
       border: 1px solid rgba(255, 98, 95, 0.85);
       background:
         repeating-linear-gradient(
-          -45deg,
+          45deg,
           rgba(255, 98, 95, 0.9) 0 1px,
           transparent 1px 4px
         );
@@ -680,7 +683,7 @@
       border: 1px solid rgba(168, 180, 198, 0.9);
       background:
         repeating-linear-gradient(
-          45deg,
+          -45deg,
           rgba(168, 180, 198, 0.95) 0 1px,
           transparent 1px 4px
         );
@@ -949,9 +952,9 @@
             </div>
           </div>
           <div class="preset-row">
-            <button type="button" class="period-chip" data-preset="12">±12 ч</button>
-            <button type="button" class="period-chip active" data-preset="24">±24 ч</button>
-            <button type="button" class="period-chip" data-preset="72">3 дня</button>
+            <button type="button" class="period-chip" data-preset="12">последние 12 часов</button>
+            <button type="button" class="period-chip active" data-preset="24">последние 24 часа</button>
+            <button type="button" class="period-chip" data-preset="72">последние 3 суток</button>
           </div>
         </div>
         <div class="filter-group">
@@ -1200,6 +1203,26 @@
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
+    /** Absolute instant → ISO with Europe/Moscow offset (matches DB string timestamps). */
+    function formatMoscowIso(date) {
+      const parts = Object.fromEntries(
+        new Intl.DateTimeFormat("en-US", {
+          timeZone: "Europe/Moscow",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hourCycle: "h23",
+        })
+          .formatToParts(date)
+          .filter((part) => part.type !== "literal")
+          .map((part) => [part.type, part.value]),
+      );
+      return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}+03:00`;
+    }
+
     function setDefaultDateRange() {
       setDateRangeFromPreset(24);
       updatePresetButtons(24);
@@ -1207,10 +1230,8 @@
 
     function setDateRangeFromPreset(hours) {
       const now = new Date();
-      const back = hours === 72 ? 72 : hours;
-      const forward = hours === 72 ? 12 : hours;
-      document.getElementById("from").value = toLocalInputValue(new Date(now.getTime() - back * 60 * 60 * 1000));
-      document.getElementById("to").value = toLocalInputValue(new Date(now.getTime() + forward * 60 * 60 * 1000));
+      document.getElementById("from").value = toLocalInputValue(new Date(now.getTime() - hours * 60 * 60 * 1000));
+      document.getElementById("to").value = "";
     }
 
     function updatePresetButtons(activeHours) {
@@ -1221,7 +1242,8 @@
 
     function fromLocalInputValue(value) {
       if (!value) return null;
-      return new Date(value).toISOString();
+      // datetime-local = браузерное локальное время → в API отдаём московский offset, как в БД
+      return formatMoscowIso(new Date(value));
     }
 
     function filterPickerRoot(id) {
@@ -1943,27 +1965,30 @@
 
     function chartTimeBounds(segments) {
       const { fromMs, toMs } = selectedTimeWindowMs();
+      const dataEnd = chartDataEndMs();
+
       if (fromMs != null && toMs != null && toMs > fromMs) {
         return { min: fromMs, max: toMs };
+      }
+      if (fromMs != null && toMs == null) {
+        return { min: fromMs, max: Math.max(dataEnd, fromMs + 60 * 1000) };
       }
 
       let minMs = Infinity;
       let maxMs = -Infinity;
-      const fallbackMax = chartDataEndMs();
       for (const segment of segments) {
         const start = new Date(segment.start_at || segment.collected_at).getTime();
         const end = segment.end_at
           ? new Date(segment.end_at).getTime()
-          : (segment.collected_at ? new Date(segment.collected_at).getTime() : fallbackMax);
+          : (segment.collected_at ? new Date(segment.collected_at).getTime() : dataEnd);
         if (start < minMs) minMs = start;
         if (end > maxMs) maxMs = end;
       }
-      if (fromMs != null) minMs = Number.isFinite(minMs) ? Math.max(minMs, fromMs) : fromMs;
-      if (toMs != null) maxMs = Number.isFinite(maxMs) ? Math.min(maxMs, toMs) : toMs;
-      if (!Number.isFinite(minMs) || !Number.isFinite(maxMs)) return null;
-      if (fromMs != null || toMs != null) {
-        return { min: minMs, max: Math.max(maxMs, minMs + 60 * 1000) };
+      if (fromMs == null && toMs != null) {
+        if (!Number.isFinite(minMs)) return null;
+        return { min: minMs, max: Math.max(toMs, minMs + 60 * 1000) };
       }
+      if (!Number.isFinite(minMs) || !Number.isFinite(maxMs)) return null;
       const spanMs = Math.max(maxMs - minMs, 60 * 60 * 1000);
       const padMs = Math.max(spanMs * 0.05, 30 * 60 * 1000);
       return { min: minMs - padMs, max: maxMs + padMs };
@@ -1974,11 +1999,14 @@
       if (!total) return "Ожидание первого сбора данных";
       const from = document.getElementById("from").value;
       const to = document.getElementById("to").value;
-      if (from || to) {
-        const parts = [];
-        if (from) parts.push(formatDateTime(from));
-        if (to) parts.push(formatDateTime(to));
-        return `Данные с ${parts.join(" по ")}`;
+      if (from && to) {
+        return `Данные с ${formatDateTime(from)} по ${formatDateTime(to)}`;
+      }
+      if (from) {
+        return `Данные с ${formatDateTime(from)}`;
+      }
+      if (to) {
+        return `Данные по ${formatDateTime(to)}`;
       }
       if (meta.from) {
         return `Данные с ${formatDateTime(meta.from)} по ${formatDateTime(meta.to)}`;

@@ -17,6 +17,7 @@ from app.storage import (
     carry_forward_station_fuels,
     dedupe_consecutive_observations,
     fuel_yes_since,
+    normalize_query_timestamp,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "reports_page.html"
@@ -39,6 +40,18 @@ def test_normalization():
     assert normalize_yes_no("-") is None
     assert normalize_queue("до 30") == "up_to_30"
     assert normalize_queue("60+") == "60_plus"
+
+
+def test_normalize_query_timestamp_to_moscow_offset():
+    assert normalize_query_timestamp(None) is None
+    assert normalize_query_timestamp("") is None
+    # Same absolute instant in UTC and Moscow must compare equal as SQL strings
+    utc = normalize_query_timestamp("2026-07-21T12:30:00.000Z")
+    msk = normalize_query_timestamp("2026-07-21T15:30:00+03:00")
+    assert utc == msk
+    assert utc == "2026-07-21T15:30:00+03:00"
+    # Naive timestamps are treated as already Moscow wall time
+    assert normalize_query_timestamp("2026-07-21T15:30:00") == "2026-07-21T15:30:00+03:00"
     assert parse_report_datetime("2026-07-11 16:15:25") == "2026-07-11T16:15:25+03:00"
 
 
@@ -451,6 +464,23 @@ def test_read_model_segments_and_fuel_since(tmp_path) -> None:
     assert fuel_segments[0]["end_at"] == second_at.isoformat()
     assert fuel_segments[1]["value"] == "offline"
     assert fuel_segments[1]["end_at"] is None
+
+
+def test_timeseries_range_accepts_utc_or_moscow_bounds(tmp_path) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    stations = parse_reports_html(html)
+    storage = Storage(tmp_path)
+    at = datetime(2026, 7, 12, 15, 30, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    storage.save_snapshot(stations, "https://example.test", at)
+
+    via_utc = storage.query_timeseries(date_from="2026-07-12T12:30:00.000Z")
+    via_msk = storage.query_timeseries(date_from="2026-07-12T15:30:00+03:00")
+    assert via_utc
+    assert len(via_utc) == len(via_msk)
+
+    # Bound after the only snapshot must exclude open segments that started earlier
+    empty = storage.query_timeseries(date_to="2026-07-12T12:29:00.000Z")
+    assert empty == []
 
 
 def test_rebuild_read_models_from_observations(tmp_path) -> None:

@@ -237,6 +237,22 @@ def segment_value_for_metric(metric: str, state: dict[str, Any]) -> str | None:
     return None
 
 
+def normalize_query_timestamp(value: str | None) -> str | None:
+    """Normalize API range bounds to Moscow-offset ISO for SQLite string compares."""
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=MOSCOW)
+    return dt.astimezone(MOSCOW).isoformat()
+
+
 def summarize_stations(stations: list[dict[str, Any]]) -> dict[str, int]:
     return {
         "total": len(stations),
@@ -851,6 +867,8 @@ class Storage:
         brands: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Return timeline segments overlapping the requested range."""
+        date_from = normalize_query_timestamp(date_from)
+        date_to = normalize_query_timestamp(date_to)
         clauses = ["1=1"]
         params: list[Any] = []
 
@@ -892,6 +910,8 @@ class Storage:
     ) -> list[dict[str, Any]]:
         _ = station_ids, brands
 
+        date_from = normalize_query_timestamp(date_from)
+        date_to = normalize_query_timestamp(date_to)
         clauses = ["1=1"]
         params: list[Any] = []
 
