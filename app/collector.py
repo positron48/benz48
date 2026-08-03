@@ -41,6 +41,8 @@ def fetch_html(url: str) -> str:
 
 
 def collect_once(storage: Storage | None = None) -> None:
+    if not settings.collection_enabled:
+        raise RuntimeError("Collection is disabled (COLLECTION_ENABLED=false)")
     storage = storage or Storage()
     html = fetch_html(settings.source_url)
     stations = parse_reports_html(html)
@@ -50,6 +52,14 @@ def collect_once(storage: Storage | None = None) -> None:
 
 
 def run_loop() -> None:
+    if not settings.collection_enabled:
+        logger.warning(
+            "Collection disabled (source archived after %s); idle forever",
+            settings.archive_to,
+        )
+        while True:
+            time.sleep(3600)
+
     storage = Storage()
     logger.info(
         "Collector started: interval=%ss url=%s",

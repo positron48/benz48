@@ -253,6 +253,25 @@ def normalize_query_timestamp(value: str | None) -> str | None:
     return dt.astimezone(MOSCOW).isoformat()
 
 
+def clamp_query_range(
+    date_from: str | None,
+    date_to: str | None,
+) -> tuple[str | None, str | None]:
+    """Clamp query bounds to the frozen archive window."""
+    archive_from = normalize_query_timestamp(settings.archive_from)
+    archive_to = normalize_query_timestamp(settings.archive_to)
+    date_from = normalize_query_timestamp(date_from)
+    date_to = normalize_query_timestamp(date_to)
+
+    if date_from is None or (archive_from and date_from < archive_from):
+        date_from = archive_from
+    if date_to is None or (archive_to and date_to > archive_to):
+        date_to = archive_to
+    if date_from and date_to and date_from > date_to:
+        date_from = date_to
+    return date_from, date_to
+
+
 def summarize_stations(stations: list[dict[str, Any]]) -> dict[str, int]:
     return {
         "total": len(stations),
@@ -788,6 +807,9 @@ class Storage:
             "snapshot_count": range_row["snapshot_count"] or 0,
             "from": range_row["min_at"],
             "to": range_row["max_at"],
+            "archive_from": settings.archive_from,
+            "archive_to": settings.archive_to,
+            "collection_enabled": settings.collection_enabled,
             "station_count": len(station_rows),
             "brands": brands,
             "stations": station_rows,
@@ -867,8 +889,7 @@ class Storage:
         brands: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Return timeline segments overlapping the requested range."""
-        date_from = normalize_query_timestamp(date_from)
-        date_to = normalize_query_timestamp(date_to)
+        date_from, date_to = clamp_query_range(date_from, date_to)
         clauses = ["1=1"]
         params: list[Any] = []
 
@@ -910,8 +931,7 @@ class Storage:
     ) -> list[dict[str, Any]]:
         _ = station_ids, brands
 
-        date_from = normalize_query_timestamp(date_from)
-        date_to = normalize_query_timestamp(date_to)
+        date_from, date_to = clamp_query_range(date_from, date_to)
         clauses = ["1=1"]
         params: list[Any] = []
 

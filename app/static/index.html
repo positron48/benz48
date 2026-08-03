@@ -125,6 +125,32 @@
       box-shadow: 0 0 0 4px rgba(64, 211, 138, 0.10);
       flex-shrink: 0;
     }
+    .update-status--stopped {
+      color: #f0c98a;
+      border-color: rgba(247, 173, 50, 0.35);
+      background: rgba(247, 173, 50, 0.08);
+    }
+    .update-status--stopped::before {
+      background: var(--orange);
+      box-shadow: 0 0 0 4px rgba(247, 173, 50, 0.12);
+    }
+    .archive-banners {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: var(--space-3);
+    }
+    .archive-banner {
+      flex: 1 1 280px;
+      margin: 0;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(247, 173, 50, 0.32);
+      background: rgba(247, 173, 50, 0.09);
+      color: #f0c98a;
+      font-size: 13px;
+      line-height: 1.4;
+    }
     .panel {
       background: linear-gradient(180deg, rgba(17, 27, 45, 0.96), rgba(10, 18, 31, 0.96));
       border: 1px solid rgba(93, 119, 157, 0.28);
@@ -920,10 +946,13 @@
         <h1 class="page-title">Мониторинг топлива</h1>
         <p class="page-period" id="subtitle">Загрузка данных...</p>
       </div>
-      <div class="update-status">Обновление каждые 5 минут</div>
+      <div class="update-status update-status--stopped">Данные не обновляются</div>
     </header>
 
-    <section class="stats-bar" id="stats" aria-live="polite"></section>
+    <div class="archive-banners" role="status">
+      <p class="archive-banner">Для анализа доступен только период с 11.07 по 31.07</p>
+      <p class="archive-banner">Источник данных больше недоступен — новые снимки не собираются</p>
+    </div>
 
     <section class="panel filters-panel filters-panel--collapsed" id="filtersPanel">
       <div class="filters-toolbar">
@@ -944,17 +973,18 @@
           <div class="date-fields">
             <div class="date-field">
               <label class="field-label" for="from">С</label>
-              <input type="datetime-local" id="from">
+              <input type="datetime-local" id="from" min="2026-07-11T00:00" max="2026-07-31T23:59">
             </div>
             <div class="date-field">
               <label class="field-label" for="to">По</label>
-              <input type="datetime-local" id="to">
+              <input type="datetime-local" id="to" min="2026-07-11T00:00" max="2026-07-31T23:59">
             </div>
           </div>
           <div class="preset-row">
             <button type="button" class="period-chip" data-preset="12">последние 12 часов</button>
-            <button type="button" class="period-chip active" data-preset="24">последние 24 часа</button>
+            <button type="button" class="period-chip" data-preset="24">последние 24 часа</button>
             <button type="button" class="period-chip" data-preset="72">последние 3 суток</button>
+            <button type="button" class="period-chip active" data-preset="all">весь период</button>
           </div>
         </div>
         <div class="filter-group">
@@ -991,18 +1021,6 @@
             <div class="filter-picker-list" role="group" aria-label="АЗС"></div>
           </div>
         </div>
-        <div class="filter-group">
-          <span class="field-label">Сейчас есть</span>
-          <div class="filter-picker" id="currentlyHas">
-            <input type="search" class="filter-picker-search" placeholder="Поиск топлива..." aria-label="Поиск по видам топлива">
-            <div class="filter-picker-toolbar">
-              <button type="button" class="button-text" data-action="select-visible">Отметить видимые</button>
-              <button type="button" class="button-text" data-action="clear-visible">Снять видимые</button>
-            </div>
-            <div class="filter-picker-list" role="group" aria-label="Сейчас есть"></div>
-          </div>
-          <div class="filter-hint">Только АЗС с выбранным топливом сейчас</div>
-        </div>
       </div>
 
       <div class="filters-actions">
@@ -1013,13 +1031,6 @@
     </section>
 
     <div class="content-stack">
-      <section class="panel table-panel">
-        <div class="table-panel__header">
-          <h2 class="panel-title">Когда появилось топливо</h2>
-        </div>
-        <div class="table-scroll" id="fuelSinceTable"></div>
-      </section>
-
       <article class="panel share-chart-panel">
         <div class="chart-panel-header card-head">
           <h2 class="panel-title">Доля АЗС с топливом</h2>
@@ -1106,13 +1117,6 @@
           </div>
         </div>
       </section>
-
-      <section class="panel table-panel">
-        <div class="table-panel__header">
-          <h2 class="panel-title">Последнее состояние</h2>
-        </div>
-        <div class="table-scroll" id="latestTable"></div>
-      </section>
     </div>
 
     <footer class="site-footer">
@@ -1129,16 +1133,6 @@
       fuel_diesel: "Дизель",
     };
     const ALL_FUEL_KEYS = ["fuel_92", "fuel_95", "fuel_diesel"];
-    const FUEL_SINCE_COLUMNS = [
-      { key: "fuel_92", sinceLabel: "АИ-92 с", sinceField: "fuel_92_since", nowLabel: "Сейчас 92" },
-      { key: "fuel_95", sinceLabel: "АИ-95 с", sinceField: "fuel_95_since", nowLabel: "Сейчас 95" },
-      { key: "fuel_diesel", sinceLabel: "Дизель с", sinceField: "fuel_diesel_since", nowLabel: "Сейчас ДТ" },
-    ];
-    const LATEST_FUEL_COLUMNS = [
-      { key: "fuel_92", label: "92" },
-      { key: "fuel_95", label: "95" },
-      { key: "fuel_diesel", label: "Дизель" },
-    ];
     const QUEUE_LABELS = {
       none: "нет",
       up_to_30: "до 30",
@@ -1190,9 +1184,13 @@
     const queueChart = echarts.init(document.getElementById("queueChart"));
     const summaryChart = echarts.init(document.getElementById("summaryChart"));
 
+    const ARCHIVE_FROM = "2026-07-11T00:00:00+03:00";
+    const ARCHIVE_TO = "2026-08-01T00:00:00+03:00";
+    const ARCHIVE_FROM_MS = Date.parse(ARCHIVE_FROM);
+    const ARCHIVE_TO_MS = Date.parse(ARCHIVE_TO);
+
     let meta = null;
-    let cache = { latest: null, timeseries: [], summary: [], fuelSince: [] };
-    let fuelSinceSort = { column: "brand", dir: "asc" };
+    let cache = { timeseries: [], summary: [] };
     let fuelHiddenStations = new Set();
     let queueHiddenStations = new Set();
 
@@ -1223,27 +1221,58 @@
       return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}+03:00`;
     }
 
+    function clampToArchive(date) {
+      const ms = date instanceof Date ? date.getTime() : Date.parse(date);
+      if (!Number.isFinite(ms)) return new Date(ARCHIVE_TO_MS);
+      return new Date(Math.min(ARCHIVE_TO_MS, Math.max(ARCHIVE_FROM_MS, ms)));
+    }
+
     function setDefaultDateRange() {
-      setDateRangeFromPreset(24);
-      updatePresetButtons(24);
+      setDateRangeFromPreset("all");
+      updatePresetButtons("all");
     }
 
-    function setDateRangeFromPreset(hours) {
-      const now = new Date();
-      document.getElementById("from").value = toLocalInputValue(new Date(now.getTime() - hours * 60 * 60 * 1000));
-      document.getElementById("to").value = "";
+    function setDateRangeFromPreset(preset) {
+      const archiveToInput = new Date(ARCHIVE_TO_MS - 60 * 1000);
+      if (preset === "all") {
+        document.getElementById("from").value = toLocalInputValue(new Date(ARCHIVE_FROM_MS));
+        document.getElementById("to").value = toLocalInputValue(archiveToInput);
+        return;
+      }
+      const hours = Number(preset);
+      const from = new Date(archiveToInput.getTime() - hours * 60 * 60 * 1000);
+      document.getElementById("from").value = toLocalInputValue(clampToArchive(from));
+      document.getElementById("to").value = toLocalInputValue(archiveToInput);
     }
 
-    function updatePresetButtons(activeHours) {
+    function updatePresetButtons(activePreset) {
       document.querySelectorAll("[data-preset]").forEach((btn) => {
-        btn.classList.toggle("active", activeHours !== null && Number(btn.dataset.preset) === activeHours);
+        btn.classList.toggle("active", activePreset !== null && String(btn.dataset.preset) === String(activePreset));
       });
+    }
+
+    function clampDateInputs() {
+      const fromEl = document.getElementById("from");
+      const toEl = document.getElementById("to");
+      const maxInput = new Date(ARCHIVE_TO_MS - 60 * 1000);
+      if (fromEl.value) {
+        fromEl.value = toLocalInputValue(clampToArchive(new Date(fromEl.value)));
+      }
+      if (toEl.value) {
+        const clamped = clampToArchive(new Date(toEl.value));
+        toEl.value = toLocalInputValue(clamped.getTime() >= ARCHIVE_TO_MS ? maxInput : clamped);
+      } else {
+        toEl.value = toLocalInputValue(maxInput);
+      }
+      if (fromEl.value && toEl.value && fromEl.value > toEl.value) {
+        fromEl.value = toEl.value;
+      }
     }
 
     function fromLocalInputValue(value) {
       if (!value) return null;
       // datetime-local = браузерное локальное время → в API отдаём московский offset, как в БД
-      return formatMoscowIso(new Date(value));
+      return formatMoscowIso(clampToArchive(new Date(value)));
     }
 
     function filterPickerRoot(id) {
@@ -1399,7 +1428,7 @@
     }
 
     function offlineLabelForStation(stationId, untilIso) {
-      const until = untilIso || cache.latest?.collected_at;
+      const until = untilIso || ARCHIVE_TO;
       if (!until) return "не работает";
       const segments = stationWorkingSegments(stationId);
       if (!segments.length) return "не работает";
@@ -1493,9 +1522,6 @@
 
       const validStations = new Set(meta.stations.map((s) => s.station_id));
       setMultiSelectValues("stations", params.getAll("stations"), validStations);
-
-      const validHas = new Set(["fuel_92", "fuel_95", "fuel_diesel"]);
-      setMultiSelectValues("currentlyHas", params.getAll("has"), validHas);
     }
 
     function syncFiltersToUrl() {
@@ -1505,7 +1531,6 @@
       for (const brand of selectedValues("brands")) params.append("brands", brand);
       for (const region of selectedValues("regions")) params.append("regions", region);
       for (const station of selectedValues("stations")) params.append("stations", station);
-      for (const fuel of selectedValues("currentlyHas")) params.append("has", fuel);
 
       const qs = params.toString();
       const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
@@ -1568,20 +1593,6 @@
       return meta.stations.find((s) => s.station_id === id);
     }
 
-    function getCurrentStationState(stationId) {
-      const fromLatest = (cache.latest?.stations || []).find((s) => s.station_id === stationId);
-      if (fromLatest) return fromLatest;
-      return (cache.fuelSince || []).find((s) => s.station_id === stationId) || null;
-    }
-
-    function stationMatchesCurrentlyHas(stationId) {
-      const required = selectedValues("currentlyHas");
-      if (!required.length) return true;
-      const state = getCurrentStationState(stationId);
-      if (!state) return false;
-      return required.every((fuelKey) => state[fuelKey] === "yes");
-    }
-
     function getActiveStationIds() {
       const search = document.getElementById("search").value.trim().toLowerCase();
       const manual = new Set(selectedValues("stations"));
@@ -1593,7 +1604,6 @@
           if (manual.size && !manual.has(station.station_id)) return false;
           if (brandFilter.size && !brandFilter.has(station.brand)) return false;
           if (regionFilter.size && !regionFilter.has(station.region_group)) return false;
-          if (!stationMatchesCurrentlyHas(station.station_id)) return false;
           if (!search) return true;
           const haystack = `${station.brand} ${station.name} ${station.address} ${station.district || ""}`.toLowerCase();
           return haystack.includes(search);
@@ -1608,7 +1618,6 @@
 
     function renderFilterNote(activeCount) {
       const search = document.getElementById("search").value.trim();
-      const currentlyHas = selectedValues("currentlyHas");
       const regions = selectedValues("regions");
       const chips = [
         `<span class="chip">АЗС: ${activeCount} / ${meta.stations.length}</span>`,
@@ -1621,199 +1630,23 @@
         chips.push(`<span class="chip chip-muted">регион: ${labels.join(", ")}</span>`);
       }
       if (search) chips.push(`<span class="chip chip-muted">поиск: «${search}»</span>`);
-      if (currentlyHas.length) {
-        chips.push(`<span class="chip chip-muted">сейчас есть: ${currentlyHas.map((f) => FUEL_LABELS[f]).join(", ")}</span>`);
-      }
       document.getElementById("filterNote").innerHTML = chips.join("");
     }
 
-    function renderStats(latest) {
-      const stats = document.getElementById("stats");
-      if (!latest || !latest.stations?.length) {
-        stats.innerHTML = '<div class="stats-bar__inner stats-bar__inner--empty">Ожидание данных</div>';
-        return;
-      }
-
-      const stations = latest.stations;
-      const total = stations.length;
-      const countYes = (key) => stations.filter((s) => s[key] === "yes").length;
-      const pct = (value) => (total ? Math.round((value / total) * 100) : 0);
-      const fuels = [
-        { key: "fuel_92", label: "АИ-92", cls: "stats-bar__fuel--92" },
-        { key: "fuel_95", label: "АИ-95", cls: "stats-bar__fuel--95" },
-        { key: "fuel_diesel", label: "Дизель", cls: "stats-bar__fuel--diesel" },
-      ];
-
-      stats.innerHTML = `
-        <div class="stats-bar__inner">
-          <span class="stats-bar__updated">Обновлено <time datetime="${latest.collected_at}">${formatDateTime(latest.collected_at)}</time></span>
-          ${fuels.map((fuel) => {
-            const yes = countYes(fuel.key);
-            return `
-              <span class="stats-bar__sep" aria-hidden="true"></span>
-              <span class="stats-bar__metric">
-                <span class="stats-bar__fuel ${fuel.cls}">${fuel.label}</span>
-                <strong class="stats-bar__pct">${pct(yes)}%</strong>
-                <span class="stats-bar__count">${yes}/${total}</span>
-              </span>
-            `;
-          }).join("")}
-          <span class="stats-bar__meta">${total} АЗС</span>
-        </div>
-      `;
-    }
-
-    function sortRows(rows, column, dir) {
-      const factor = dir === "asc" ? 1 : -1;
-      return [...rows].sort((a, b) => {
-        let av = a[column];
-        let bv = b[column];
-        if (column.endsWith("_since")) {
-          av = av ? new Date(av).getTime() : Number.NEGATIVE_INFINITY;
-          bv = bv ? new Date(bv).getTime() : Number.NEGATIVE_INFINITY;
-        } else if (column === "station") {
-          av = `${a.brand} ${a.address}`.toLowerCase();
-          bv = `${b.brand} ${b.address}`.toLowerCase();
-        } else if (column === "queue") {
-          av = queueNumeric(av);
-          bv = queueNumeric(bv);
-          av = av ?? Number.POSITIVE_INFINITY;
-          bv = bv ?? Number.POSITIVE_INFINITY;
-        } else {
-          av = (av ?? "").toString().toLowerCase();
-          bv = (bv ?? "").toString().toLowerCase();
-        }
-        if (av < bv) return -1 * factor;
-        if (av > bv) return 1 * factor;
-        return 0;
-      });
-    }
-
     function visibleFuelChartKeys() {
-      const selected = selectedValues("currentlyHas");
-      return selected.length ? selected : ALL_FUEL_KEYS;
-    }
-
-    function visibleFuelSinceColumns() {
-      const visible = new Set(visibleFuelChartKeys());
-      return FUEL_SINCE_COLUMNS.filter((column) => visible.has(column.key));
-    }
-
-    function visibleLatestFuelColumns() {
-      const visible = new Set(visibleFuelChartKeys());
-      return LATEST_FUEL_COLUMNS.filter((column) => visible.has(column.key));
-    }
-
-    function ensureFuelSinceSortValid() {
-      const valid = new Set(["station", "queue"]);
-      for (const column of visibleFuelSinceColumns()) {
-        valid.add(column.sinceField);
-        valid.add(column.key);
-      }
-      if (!valid.has(fuelSinceSort.column)) {
-        fuelSinceSort.column = "station";
-        fuelSinceSort.dir = "asc";
-      }
-    }
-
-    function sortHeader(label, column) {
-      const active = fuelSinceSort.column === column;
-      const mark = active ? (fuelSinceSort.dir === "asc" ? "▲" : "▼") : "↕";
-      return `<th class="sortable${active ? " sorted" : ""}" data-sort="${column}">${label}<span class="sort-mark">${mark}</span></th>`;
-    }
-
-    function renderFuelSinceTable(rows) {
-      const container = document.getElementById("fuelSinceTable");
-      if (!rows.length) {
-        container.innerHTML = '<div class="empty">Нет АЗС по текущему фильтру</div>';
-        return;
-      }
-
-      ensureFuelSinceSortValid();
-      const fuelColumns = visibleFuelSinceColumns();
-      const sorted = sortRows(rows, fuelSinceSort.column, fuelSinceSort.dir);
-      const body = sorted.map((row) => `
-        <tr>
-          <td>${stationCell(row.brand, row.address, row.is_working, row.station_id)}</td>
-          ${fuelColumns.map((column) => `
-            <td>${formatDateTime(row[column.sinceField])}</td>
-            <td>${badge(row[column.key])}</td>
-          `).join("")}
-          <td>${queueLabel(row.queue)}</td>
-        </tr>
-      `).join("");
-
-      container.innerHTML = `
-        <table class="data-table">
-          <thead>
-            <tr>
-              ${sortHeader("АЗС", "station")}
-              ${fuelColumns.map((column) => `
-                ${sortHeader(column.sinceLabel, column.sinceField)}
-                ${sortHeader(column.nowLabel, column.key)}
-              `).join("")}
-              ${sortHeader("Очередь", "queue")}
-            </tr>
-          </thead>
-          <tbody>${body}</tbody>
-        </table>`;
-
-      container.querySelectorAll("th.sortable").forEach((th) => {
-        th.addEventListener("click", () => {
-          const column = th.dataset.sort;
-          if (fuelSinceSort.column === column) {
-            fuelSinceSort.dir = fuelSinceSort.dir === "asc" ? "desc" : "asc";
-          } else {
-            fuelSinceSort.column = column;
-            fuelSinceSort.dir = "asc";
-          }
-          renderAll();
-        });
-      });
-    }
-
-    function renderLatestTable(latest) {
-      const container = document.getElementById("latestTable");
-      if (!latest || !latest.stations.length) {
-        container.innerHTML = '<div class="empty">Данных пока нет. Подождите первый сбор.</div>';
-        return;
-      }
-      const fuelColumns = visibleLatestFuelColumns();
-      const rows = latest.stations.map((s) => `
-        <tr>
-          <td>${stationCell(s.brand, s.address, s.is_working, s.station_id)}</td>
-          <td>${badge(s.is_working)}</td>
-          ${fuelColumns.map((column) => `<td>${badge(s[column.key])}</td>`).join("")}
-          <td>${queueLabel(s.queue)}</td>
-          <td>${formatDateTime(s.last_report_at)}</td>
-        </tr>
-      `).join("");
-      container.innerHTML = `
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>АЗС</th>
-              <th>Работает</th>
-              ${fuelColumns.map((column) => `<th>${column.label}</th>`).join("")}
-              <th>Очередь</th>
-              <th>Последний отчёт</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>`;
+      return ALL_FUEL_KEYS;
     }
 
     function stationsFromTimeseries(segments) {
       const seen = new Map();
       for (const row of segments) {
         if (seen.has(row.station_id)) continue;
-        const latest = getCurrentStationState(row.station_id);
         seen.set(row.station_id, {
           station_id: row.station_id,
           brand: row.brand,
           address: row.address,
           name: row.name,
-          is_working: latest?.is_working ?? null,
+          is_working: null,
         });
       }
       return [...seen.values()].sort((a, b) =>
@@ -1958,9 +1791,7 @@
     }
 
     function chartDataEndMs() {
-      return cache.latest?.collected_at
-        ? new Date(cache.latest.collected_at).getTime()
-        : Date.now();
+      return ARCHIVE_TO_MS;
     }
 
     function chartTimeBounds(segments) {
@@ -2282,14 +2113,8 @@
         block.hidden = !visible.has(block.dataset.fuelKey);
       });
       const desc = document.getElementById("fuelChartsDesc");
-      const selected = selectedValues("currentlyHas");
-      if (selected.length) {
-        desc.textContent = `Показано: ${selected.map((k) => FUEL_LABELS[k]).join(", ")}`;
-        desc.hidden = false;
-      } else {
-        desc.textContent = "";
-        desc.hidden = true;
-      }
+      desc.textContent = "";
+      desc.hidden = true;
     }
 
     function renderFuelCharts(timeseries) {
@@ -2515,20 +2340,8 @@
     function renderAll() {
       const activeIds = new Set(getActiveStationIds());
       const timeseries = filterByStations(cache.timeseries);
-      const fuelSince = filterByStations(cache.fuelSince);
-
-      const latest = cache.latest
-        ? {
-            ...cache.latest,
-            stations: (cache.latest.stations || []).filter((s) => activeIds.has(s.station_id)),
-            station_count: [...activeIds].length,
-          }
-        : null;
 
       renderFilterNote(activeIds.size);
-      renderStats(latest);
-      renderFuelSinceTable(fuelSince);
-      renderLatestTable(latest);
       renderFuelCharts(timeseries);
       renderQueueChart(timeseries);
       renderSummaryChart(cache.summary || []);
@@ -2556,15 +2369,13 @@
     async function loadData() {
       const query = buildQuery();
       const summaryQuery = buildSummaryQuery();
-      const [latest, timeseries, fuelSince, summary] = await Promise.all([
-        fetchJson("/api/latest"),
+      const [timeseries, summary] = await Promise.all([
         fetchJson(`/api/timeseries?${query}`),
-        fetchJson(`/api/fuel-since?${query}`),
         fetchJson(`/api/summary?${summaryQuery}`),
       ]);
 
       lastSummaryQuery = summaryQuery;
-      cache = { latest, timeseries, summary, fuelSince };
+      cache = { timeseries, summary };
 
       document.getElementById("subtitle").textContent = formatSubtitle();
       updateSummaryChartDesc();
@@ -2593,18 +2404,8 @@
         "value",
         "label",
       );
-      setOptions(
-        "currentlyHas",
-        [
-          { value: "fuel_92", label: "АИ-92" },
-          { value: "fuel_95", label: "АИ-95" },
-          { value: "fuel_diesel", label: "Дизель" },
-        ],
-        "value",
-        "label",
-      );
 
-      for (const id of ["regions", "brands", "stations", "currentlyHas"]) {
+      for (const id of ["regions", "brands", "stations"]) {
         bindFilterPicker(id, onFiltersChanged);
       }
 
@@ -2616,6 +2417,7 @@
       });
 
       document.getElementById("apply").addEventListener("click", async () => {
+        clampDateInputs();
         syncFiltersToUrl();
         await loadData();
       });
@@ -2625,7 +2427,7 @@
       });
       document.getElementById("reset").addEventListener("click", () => {
         document.getElementById("search").value = "";
-        for (const id of ["currentlyHas", "brands", "regions", "stations"]) {
+        for (const id of ["brands", "regions", "stations"]) {
           clearFilterPicker(id);
         }
         setDefaultDateRange();
@@ -2634,18 +2436,23 @@
       });
       document.querySelectorAll("[data-preset]").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const hours = Number(btn.dataset.preset);
-          setDateRangeFromPreset(hours);
-          updatePresetButtons(hours);
+          const preset = btn.dataset.preset;
+          setDateRangeFromPreset(preset);
+          updatePresetButtons(preset);
         });
       });
-      document.getElementById("from").addEventListener("change", () => updatePresetButtons(null));
-      document.getElementById("to").addEventListener("change", () => updatePresetButtons(null));
+      document.getElementById("from").addEventListener("change", () => {
+        clampDateInputs();
+        updatePresetButtons(null);
+      });
+      document.getElementById("to").addEventListener("change", () => {
+        clampDateInputs();
+        updatePresetButtons(null);
+      });
 
       window.addEventListener("resize", resizeAllCharts);
 
       await loadData();
-      setInterval(loadData, 60000);
     }
 
     init().catch((error) => {

@@ -42,6 +42,36 @@ def test_normalization():
     assert normalize_queue("60+") == "60_plus"
 
 
+def test_clamp_query_range_to_archive() -> None:
+    from app.storage import clamp_query_range
+
+    date_from, date_to = clamp_query_range(None, None)
+    assert date_from == "2026-07-11T00:00:00+03:00"
+    assert date_to == "2026-08-01T00:00:00+03:00"
+
+    date_from, date_to = clamp_query_range(
+        "2026-06-01T00:00:00+03:00",
+        "2026-08-15T12:00:00+03:00",
+    )
+    assert date_from == "2026-07-11T00:00:00+03:00"
+    assert date_to == "2026-08-01T00:00:00+03:00"
+
+    date_from, date_to = clamp_query_range(
+        "2026-07-20T10:00:00+03:00",
+        "2026-07-21T10:00:00+03:00",
+    )
+    assert date_from == "2026-07-20T10:00:00+03:00"
+    assert date_to == "2026-07-21T10:00:00+03:00"
+
+
+def test_collect_once_respects_collection_disabled(monkeypatch) -> None:
+    from app import collector
+
+    monkeypatch.setattr(collector.settings, "collection_enabled", False)
+    with pytest.raises(RuntimeError, match="disabled"):
+        collector.collect_once()
+
+
 def test_normalize_query_timestamp_to_moscow_offset():
     assert normalize_query_timestamp(None) is None
     assert normalize_query_timestamp("") is None
@@ -318,7 +348,11 @@ def test_api_endpoints(tmp_path):
     html = FIXTURE.read_text(encoding="utf-8")
     stations = parse_reports_html(html)
     storage = Storage(tmp_path)
-    storage.save_snapshot(stations, "https://example.test")
+    storage.save_snapshot(
+        stations,
+        "https://example.test",
+        datetime(2026, 7, 20, 12, 0, 0, tzinfo=ZoneInfo("Europe/Moscow")),
+    )
 
     from app import web
 
@@ -333,6 +367,9 @@ def test_api_endpoints(tmp_path):
     assert meta.status_code == 200
     body = meta.json()
     assert body["snapshot_count"] == 1
+    assert body["archive_from"]
+    assert body["archive_to"]
+    assert body["collection_enabled"] is False
     assert body["stations"][0]["district"]
     assert body["region_groups"]
 
