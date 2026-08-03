@@ -950,7 +950,7 @@
     </header>
 
     <div class="archive-banners" role="status">
-      <p class="archive-banner">Для анализа доступен только период с 11.07 по 31.07</p>
+      <p class="archive-banner">Для анализа доступен только период с 11.07 по 30.07</p>
       <p class="archive-banner">Источник данных больше недоступен — новые снимки не собираются</p>
     </div>
 
@@ -973,11 +973,11 @@
           <div class="date-fields">
             <div class="date-field">
               <label class="field-label" for="from">С</label>
-              <input type="datetime-local" id="from" min="2026-07-11T00:00" max="2026-07-31T23:59">
+              <input type="datetime-local" id="from" min="2026-07-11T00:00" max="2026-07-30T23:59">
             </div>
             <div class="date-field">
               <label class="field-label" for="to">По</label>
-              <input type="datetime-local" id="to" min="2026-07-11T00:00" max="2026-07-31T23:59">
+              <input type="datetime-local" id="to" min="2026-07-11T00:00" max="2026-07-30T23:59">
             </div>
           </div>
           <div class="preset-row">
@@ -1185,7 +1185,7 @@
     const summaryChart = echarts.init(document.getElementById("summaryChart"));
 
     const ARCHIVE_FROM = "2026-07-11T00:00:00+03:00";
-    const ARCHIVE_TO = "2026-07-31T23:59:59+03:00";
+    const ARCHIVE_TO = "2026-07-30T23:59:59+03:00";
     const ARCHIVE_FROM_MS = Date.parse(ARCHIVE_FROM);
     const ARCHIVE_TO_MS = Date.parse(ARCHIVE_TO);
 
