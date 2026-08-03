@@ -47,14 +47,14 @@ def test_clamp_query_range_to_archive() -> None:
 
     date_from, date_to = clamp_query_range(None, None)
     assert date_from == "2026-07-11T00:00:00+03:00"
-    assert date_to == "2026-08-01T00:00:00+03:00"
+    assert date_to == "2026-07-31T23:59:59+03:00"
 
     date_from, date_to = clamp_query_range(
         "2026-06-01T00:00:00+03:00",
         "2026-08-15T12:00:00+03:00",
     )
     assert date_from == "2026-07-11T00:00:00+03:00"
-    assert date_to == "2026-08-01T00:00:00+03:00"
+    assert date_to == "2026-07-31T23:59:59+03:00"
 
     date_from, date_to = clamp_query_range(
         "2026-07-20T10:00:00+03:00",

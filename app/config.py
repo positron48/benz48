@@ -12,7 +12,7 @@ DEFAULT_SOURCE_URL = (
 
 # Source site disappeared around 2026-07-31; archive covers 11.07–31.07 inclusive.
 ARCHIVE_FROM = "2026-07-11T00:00:00+03:00"
-ARCHIVE_TO = "2026-08-01T00:00:00+03:00"
+ARCHIVE_TO = "2026-07-31T23:59:59+03:00"
 
 
 def _int(name: str, default: int) -> int:

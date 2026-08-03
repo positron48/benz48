@@ -1185,7 +1185,7 @@
     const summaryChart = echarts.init(document.getElementById("summaryChart"));
 
     const ARCHIVE_FROM = "2026-07-11T00:00:00+03:00";
-    const ARCHIVE_TO = "2026-08-01T00:00:00+03:00";
+    const ARCHIVE_TO = "2026-07-31T23:59:59+03:00";
     const ARCHIVE_FROM_MS = Date.parse(ARCHIVE_FROM);
     const ARCHIVE_TO_MS = Date.parse(ARCHIVE_TO);
 
@@ -1233,16 +1233,16 @@
     }
 
     function setDateRangeFromPreset(preset) {
-      const archiveToInput = new Date(ARCHIVE_TO_MS - 60 * 1000);
+      const archiveTo = new Date(ARCHIVE_TO_MS);
       if (preset === "all") {
         document.getElementById("from").value = toLocalInputValue(new Date(ARCHIVE_FROM_MS));
-        document.getElementById("to").value = toLocalInputValue(archiveToInput);
+        document.getElementById("to").value = toLocalInputValue(archiveTo);
         return;
       }
       const hours = Number(preset);
-      const from = new Date(archiveToInput.getTime() - hours * 60 * 60 * 1000);
+      const from = new Date(archiveTo.getTime() - hours * 60 * 60 * 1000);
       document.getElementById("from").value = toLocalInputValue(clampToArchive(from));
-      document.getElementById("to").value = toLocalInputValue(archiveToInput);
+      document.getElementById("to").value = toLocalInputValue(archiveTo);
     }
 
     function updatePresetButtons(activePreset) {
@@ -1254,15 +1254,13 @@
     function clampDateInputs() {
       const fromEl = document.getElementById("from");
       const toEl = document.getElementById("to");
-      const maxInput = new Date(ARCHIVE_TO_MS - 60 * 1000);
       if (fromEl.value) {
         fromEl.value = toLocalInputValue(clampToArchive(new Date(fromEl.value)));
       }
       if (toEl.value) {
-        const clamped = clampToArchive(new Date(toEl.value));
-        toEl.value = toLocalInputValue(clamped.getTime() >= ARCHIVE_TO_MS ? maxInput : clamped);
+        toEl.value = toLocalInputValue(clampToArchive(new Date(toEl.value)));
       } else {
-        toEl.value = toLocalInputValue(maxInput);
+        toEl.value = toLocalInputValue(new Date(ARCHIVE_TO_MS));
       }
       if (fromEl.value && toEl.value && fromEl.value > toEl.value) {
         fromEl.value = toEl.value;
