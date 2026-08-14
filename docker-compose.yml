@@ -7,7 +7,6 @@ services:
     environment:
       DATA_DIR: /app/data
       BOOTSTRAP_ENABLED: "false"
-      COLLECTION_ENABLED: "false"
     volumes:
       - ./data:/app/data
       - ./app:/app/app:ro
@@ -24,7 +23,6 @@ services:
     environment:
       DATA_DIR: /app/data
       BOOTSTRAP_ENABLED: "true"
-      COLLECTION_ENABLED: "false"
     ports:
       - "${PORT:-18743}:8000"
     volumes:

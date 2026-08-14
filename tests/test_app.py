@@ -42,34 +42,34 @@ def test_normalization():
     assert normalize_queue("60+") == "60_plus"
 
 
-def test_clamp_query_range_to_archive() -> None:
-    from app.storage import clamp_query_range
+def test_seal_source_outage_marks_gap_as_missing(tmp_path) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    stations = parse_reports_html(html)
+    storage = Storage(tmp_path)
+    first_at = datetime(2026, 7, 30, 12, 0, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    leftover_at = datetime(2026, 7, 31, 18, 0, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    storage.save_snapshot(stations, "https://example.test", first_at)
+    storage.save_snapshot(stations, "https://example.test", leftover_at)
 
-    date_from, date_to = clamp_query_range(None, None)
-    assert date_from == "2026-07-11T00:00:00+03:00"
-    assert date_to == "2026-07-30T23:59:59+03:00"
+    assert storage.seal_source_outage() is True
+    assert storage.seal_source_outage() is False
 
-    date_from, date_to = clamp_query_range(
-        "2026-06-01T00:00:00+03:00",
-        "2026-08-15T12:00:00+03:00",
-    )
-    assert date_from == "2026-07-11T00:00:00+03:00"
-    assert date_to == "2026-07-30T23:59:59+03:00"
+    segments = storage.query_timeseries()
+    missing = [row for row in segments if row["value"] == "missing"]
+    assert missing
+    assert all(row["start_at"].startswith("2026-07-31T00:00:00") for row in missing)
+    leftover = [
+        row
+        for row in segments
+        if row["start_at"] >= "2026-07-31T00:00:00+03:00" and row["value"] != "missing"
+    ]
+    assert leftover == []
 
-    date_from, date_to = clamp_query_range(
-        "2026-07-20T10:00:00+03:00",
-        "2026-07-21T10:00:00+03:00",
-    )
-    assert date_from == "2026-07-20T10:00:00+03:00"
-    assert date_to == "2026-07-21T10:00:00+03:00"
-
-
-def test_collect_once_respects_collection_disabled(monkeypatch) -> None:
-    from app import collector
-
-    monkeypatch.setattr(collector.settings, "collection_enabled", False)
-    with pytest.raises(RuntimeError, match="disabled"):
-        collector.collect_once()
+    resume_at = datetime(2026, 8, 14, 12, 0, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    storage.save_snapshot(stations, "https://example.test", resume_at)
+    after = storage.query_timeseries(date_from="2026-08-14T12:00:00+03:00")
+    assert after
+    assert all(row["value"] != "missing" for row in after)
 
 
 def test_normalize_query_timestamp_to_moscow_offset():
@@ -367,9 +367,6 @@ def test_api_endpoints(tmp_path):
     assert meta.status_code == 200
     body = meta.json()
     assert body["snapshot_count"] == 1
-    assert body["archive_from"]
-    assert body["archive_to"]
-    assert body["collection_enabled"] is False
     assert body["stations"][0]["district"]
     assert body["region_groups"]
 

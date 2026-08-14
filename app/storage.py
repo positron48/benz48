@@ -113,6 +113,7 @@ COMPARE_FIELDS = (
 SEGMENT_METRICS = ("is_working", "fuel_92", "fuel_95", "fuel_diesel", "queue")
 FUEL_KEYS = ("fuel_92", "fuel_95", "fuel_diesel")
 OUTAGE_CARRY_KEYS = (*FUEL_KEYS, "queue")
+MISSING_VALUE = "missing"
 GLOBAL_REGION_ID = ""
 
 
@@ -253,23 +254,14 @@ def normalize_query_timestamp(value: str | None) -> str | None:
     return dt.astimezone(MOSCOW).isoformat()
 
 
-def clamp_query_range(
-    date_from: str | None,
-    date_to: str | None,
-) -> tuple[str | None, str | None]:
-    """Clamp query bounds to the frozen archive window."""
-    archive_from = normalize_query_timestamp(settings.archive_from)
-    archive_to = normalize_query_timestamp(settings.archive_to)
-    date_from = normalize_query_timestamp(date_from)
-    date_to = normalize_query_timestamp(date_to)
-
-    if date_from is None or (archive_from and date_from < archive_from):
-        date_from = archive_from
-    if date_to is None or (archive_to and date_to > archive_to):
-        date_to = archive_to
-    if date_from and date_to and date_from > date_to:
-        date_from = date_to
-    return date_from, date_to
+def outage_window() -> tuple[str, str]:
+    """Known source outage: [from, resume_after). Snapshots in this window are leftovers."""
+    start = normalize_query_timestamp(settings.outage_from) or settings.outage_from
+    resume_after = (
+        normalize_query_timestamp(settings.outage_resume_after)
+        or settings.outage_resume_after
+    )
+    return start, resume_after
 
 
 def summarize_stations(stations: list[dict[str, Any]]) -> dict[str, int]:
@@ -322,6 +314,7 @@ class Storage:
         if needs_rebuild:
             logger.info("Rebuilding read models from observations")
             self.rebuild_read_models()
+        self.seal_source_outage()
 
     def _read_models_need_rebuild(self, conn: sqlite3.Connection) -> bool:
         observations = conn.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
@@ -470,14 +463,134 @@ class Storage:
         metric: str,
         start_at: str,
         value: str | None,
+        end_at: str | None = None,
     ) -> None:
         conn.execute(
             """
             INSERT INTO timeline_segments (station_id, metric, start_at, end_at, value)
-            VALUES (?, ?, ?, NULL, ?)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (station_id, metric, start_at, value),
+            (station_id, metric, start_at, end_at, value),
         )
+
+    def _close_open_missing_segments(
+        self,
+        conn: sqlite3.Connection,
+        end_at: str,
+    ) -> set[tuple[str, str]]:
+        rows = conn.execute(
+            """
+            SELECT station_id, metric FROM timeline_segments
+            WHERE value = ? AND end_at IS NULL
+            """,
+            (MISSING_VALUE,),
+        ).fetchall()
+        if not rows:
+            return set()
+        conn.execute(
+            """
+            UPDATE timeline_segments
+            SET end_at = ?
+            WHERE value = ? AND end_at IS NULL
+            """,
+            (end_at, MISSING_VALUE),
+        )
+        return {(row["station_id"], row["metric"]) for row in rows}
+
+    def seal_source_outage(self) -> bool:
+        """Mark the source downtime as missing segments so charts do not carry last state."""
+        outage_from, resume_after = outage_window()
+        with self._connect() as conn:
+            already = conn.execute(
+                """
+                SELECT 1 FROM timeline_segments
+                WHERE value = ? AND start_at = ?
+                LIMIT 1
+                """,
+                (MISSING_VALUE, outage_from),
+            ).fetchone()
+            if already:
+                return False
+
+            bounds = conn.execute(
+                """
+                SELECT MIN(collected_at) AS min_at, MAX(collected_at) AS max_at
+                FROM snapshots
+                """
+            ).fetchone()
+            min_at = bounds["min_at"] if bounds else None
+            max_at = bounds["max_at"] if bounds else None
+            if not min_at or not max_at:
+                return False
+
+            resume_row = conn.execute(
+                """
+                SELECT MIN(collected_at) AS resume_at
+                FROM snapshots
+                WHERE collected_at >= ?
+                """,
+                (resume_after,),
+            ).fetchone()
+            resume_at = resume_row["resume_at"] if resume_row else None
+
+            leftover = outage_from <= max_at < resume_after
+            spanned = min_at < outage_from and resume_at is not None
+            if not leftover and not spanned:
+                return False
+
+            conn.execute(
+                """
+                DELETE FROM timeline_segments
+                WHERE start_at >= ?
+                  AND (? IS NULL OR start_at < ?)
+                  AND IFNULL(value, '') != ?
+                """,
+                (outage_from, resume_at, resume_at, MISSING_VALUE),
+            )
+            conn.execute(
+                """
+                UPDATE timeline_segments
+                SET end_at = ?
+                WHERE start_at < ?
+                  AND IFNULL(value, '') != ?
+                  AND (end_at IS NULL OR end_at > ?)
+                """,
+                (outage_from, outage_from, MISSING_VALUE, outage_from),
+            )
+            conn.execute(
+                """
+                DELETE FROM summary_points
+                WHERE collected_at >= ?
+                  AND (? IS NULL OR collected_at < ?)
+                """,
+                (outage_from, resume_at, resume_at),
+            )
+
+            pairs = conn.execute(
+                """
+                SELECT DISTINCT station_id, metric
+                FROM timeline_segments
+                WHERE end_at = ?
+                """,
+                (outage_from,),
+            ).fetchall()
+            for row in pairs:
+                self._open_segment(
+                    conn,
+                    row["station_id"],
+                    row["metric"],
+                    outage_from,
+                    MISSING_VALUE,
+                    resume_at,
+                )
+            conn.commit()
+            logger.info(
+                "Sealed source outage as missing: from=%s resume_at=%s stations=%s",
+                outage_from,
+                resume_at,
+                len({row["station_id"] for row in pairs}),
+            )
+            return True
 
     def _upsert_station_state(
         self,
@@ -583,6 +696,7 @@ class Storage:
             else self._load_station_state_map(conn)
         )
         next_state = dict(previous_state)
+        closed_missing = self._close_open_missing_segments(conn, collected_at)
 
         for raw in stations:
             station_id = raw.get("station_id") or raw["id"]
@@ -620,8 +734,9 @@ class Storage:
                     if previous
                     else object()
                 )
-                if previous is None or new_value != old_value:
-                    if previous is not None:
+                gap_open = (station_id, metric) in closed_missing
+                if previous is None or new_value != old_value or gap_open:
+                    if previous is not None or gap_open:
                         self._close_open_segment(conn, station_id, metric, collected_at)
                     self._open_segment(
                         conn, station_id, metric, collected_at, new_value
@@ -634,6 +749,7 @@ class Storage:
         return next_state
 
     def rebuild_read_models(self) -> None:
+        outage_from, resume_after = outage_window()
         with self._connect() as conn:
             conn.execute("DELETE FROM station_state")
             conn.execute("DELETE FROM timeline_segments")
@@ -648,6 +764,8 @@ class Storage:
             ).fetchall()
             state: dict[str, dict[str, Any]] = {}
             for (collected_at,) in timestamps:
+                if outage_from <= collected_at < resume_after:
+                    continue
                 rows = conn.execute(
                     """
                     SELECT station_id, brand, name, district, address, is_working,
@@ -668,6 +786,7 @@ class Storage:
                 conn.execute("SELECT COUNT(*) FROM timeline_segments").fetchone()[0],
                 conn.execute("SELECT COUNT(*) FROM summary_points").fetchone()[0],
             )
+        self.seal_source_outage()
 
     def _index_snapshot(self, path: Path, payload: dict[str, Any]) -> str:
         collected_at = payload["collected_at"]
@@ -686,6 +805,17 @@ class Storage:
                 last_signatures.get(station["id"]) == observation_signature(station)
                 for station in stations
             )
+            if unchanged:
+                gap_open = conn.execute(
+                    """
+                    SELECT 1 FROM timeline_segments
+                    WHERE value = ? AND end_at IS NULL
+                    LIMIT 1
+                    """,
+                    (MISSING_VALUE,),
+                ).fetchone()
+                if gap_open:
+                    unchanged = False
 
             cursor = conn.execute(
                 """
@@ -807,9 +937,6 @@ class Storage:
             "snapshot_count": range_row["snapshot_count"] or 0,
             "from": range_row["min_at"],
             "to": range_row["max_at"],
-            "archive_from": settings.archive_from,
-            "archive_to": settings.archive_to,
-            "collection_enabled": settings.collection_enabled,
             "station_count": len(station_rows),
             "brands": brands,
             "stations": station_rows,
@@ -889,7 +1016,8 @@ class Storage:
         brands: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Return timeline segments overlapping the requested range."""
-        date_from, date_to = clamp_query_range(date_from, date_to)
+        date_from = normalize_query_timestamp(date_from)
+        date_to = normalize_query_timestamp(date_to)
         clauses = ["1=1"]
         params: list[Any] = []
 
@@ -931,7 +1059,8 @@ class Storage:
     ) -> list[dict[str, Any]]:
         _ = station_ids, brands
 
-        date_from, date_to = clamp_query_range(date_from, date_to)
+        date_from = normalize_query_timestamp(date_from)
+        date_to = normalize_query_timestamp(date_to)
         clauses = ["1=1"]
         params: list[Any] = []
 

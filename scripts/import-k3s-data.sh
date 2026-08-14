@@ -43,4 +43,9 @@ kubectl -n "$NAMESPACE" exec "$POD" -c web -- sh -c '
 
 echo "Restarting deployments to reopen SQLite cleanly..."
 kubectl -n "$NAMESPACE" scale deployment/lipetsk-gas-monitor-collector --replicas=0 2>/dev/null || true
+kubectl -n "$NAMESPACE" rollout restart deployment/lipetsk-gas-monitor-web 2>/dev/null \
+  || kubectl -n "$NAMESPACE" rollout restart "deployment/$DEPLOYMENT"
+kubectl -n "$NAMESPACE" rollout status deployment/lipetsk-gas-monitor-web --timeout=120s 2>/dev/null \
+  || kubectl -n "$NAMESPACE" rollout status "deployment/$DEPLOYMENT" --timeout=120s
+kubectl -n "$NAMESPACE" scale deployment/lipetsk-gas-monitor-collector --replicas=1 2>/dev/null || true
 echo "Done. Check https://gas.qantrix.ru/api/meta"
