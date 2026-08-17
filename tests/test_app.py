@@ -42,6 +42,44 @@ def test_normalization():
     assert normalize_queue("60+") == "60_plus"
 
 
+def test_absent_stations_reset_fuel_and_close_timelines(tmp_path) -> None:
+    html = FIXTURE.read_text(encoding="utf-8")
+    stations = parse_reports_html(html)
+    storage = Storage(tmp_path)
+
+    first_at = datetime(2026, 8, 14, 10, 0, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    second_at = datetime(2026, 8, 14, 10, 5, 0, tzinfo=ZoneInfo("Europe/Moscow"))
+    dropped = stations[0]
+
+    storage.save_snapshot(stations, "https://example.test", first_at)
+    storage.save_snapshot(stations[1:], "https://example.test", second_at)
+
+    with storage._connect() as conn:
+        row = conn.execute(
+            "SELECT fuel_95, is_working, updated_at FROM station_state WHERE station_id = ?",
+            (dropped.id,),
+        ).fetchone()
+    assert row["fuel_95"] == "no"
+    assert row["is_working"] == "no"
+    assert row["updated_at"] == first_at.isoformat()
+
+    segments = storage.query_timeseries(
+        station_ids=[dropped.id],
+        date_from=second_at.isoformat(),
+    )
+    fuel_95 = [s for s in segments if s["metric"] == "fuel_95"]
+    assert fuel_95
+    assert fuel_95[-1]["value"] == "offline"
+    assert fuel_95[-1]["start_at"] == second_at.isoformat()
+
+    fuel_since = storage.query_fuel_since(station_ids=[dropped.id])
+    assert fuel_since[0]["fuel_95"] == "no"
+
+    latest = storage.get_latest()
+    assert latest is not None
+    assert all(s["station_id"] != dropped.id for s in latest["stations"])
+
+
 def test_seal_source_outage_marks_gap_as_missing(tmp_path) -> None:
     html = FIXTURE.read_text(encoding="utf-8")
     stations = parse_reports_html(html)

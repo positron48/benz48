@@ -288,6 +288,32 @@ def summarize_stations(stations: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+def absent_station_state(
+    previous: dict[str, Any],
+) -> dict[str, Any]:
+    """Station dropped from source scrape — no live data means no fuel."""
+    return {
+        "station_id": previous["station_id"],
+        "brand": previous["brand"],
+        "name": previous["name"],
+        "district": previous.get("district"),
+        "address": previous["address"],
+        "is_working": "no",
+        "fuel_92": "no",
+        "fuel_95": "no",
+        "fuel_diesel": "no",
+        "queue": None,
+        "reason": previous.get("reason"),
+        "expected_working_at": previous.get("expected_working_at"),
+        "last_report_at": previous.get("last_report_at"),
+        "fuel_92_since": previous.get("fuel_92_since"),
+        "fuel_95_since": previous.get("fuel_95_since"),
+        "fuel_diesel_since": previous.get("fuel_diesel_since"),
+        # Keep last seen time so /api/latest still lists only current scrape.
+        "updated_at": previous["updated_at"],
+    }
+
+
 class Storage:
     def __init__(self, data_dir: Path | None = None) -> None:
         self.data_dir = data_dir or settings.data_dir
@@ -683,6 +709,30 @@ class Storage:
                 ),
             )
 
+    def _transition_station_segments(
+        self,
+        conn: sqlite3.Connection,
+        station_id: str,
+        previous: dict[str, Any] | None,
+        current: dict[str, Any],
+        collected_at: str,
+        closed_missing: set[tuple[str, str]],
+    ) -> None:
+        for metric in SEGMENT_METRICS:
+            new_value = segment_value_for_metric(metric, current)
+            old_value = (
+                segment_value_for_metric(metric, previous)
+                if previous
+                else object()
+            )
+            gap_open = (station_id, metric) in closed_missing
+            if previous is None or new_value != old_value or gap_open:
+                if previous is not None or gap_open:
+                    self._close_open_segment(conn, station_id, metric, collected_at)
+                self._open_segment(
+                    conn, station_id, metric, collected_at, new_value
+                )
+
     def _apply_read_model(
         self,
         conn: sqlite3.Connection,
@@ -697,9 +747,11 @@ class Storage:
         )
         next_state = dict(previous_state)
         closed_missing = self._close_open_missing_segments(conn, collected_at)
+        seen_ids: set[str] = set()
 
         for raw in stations:
             station_id = raw.get("station_id") or raw["id"]
+            seen_ids.add(station_id)
             previous = previous_state.get(station_id)
             current = {
                 "station_id": station_id,
@@ -727,25 +779,24 @@ class Storage:
                     collected_at,
                 )
 
-            for metric in SEGMENT_METRICS:
-                new_value = segment_value_for_metric(metric, current)
-                old_value = (
-                    segment_value_for_metric(metric, previous)
-                    if previous
-                    else object()
-                )
-                gap_open = (station_id, metric) in closed_missing
-                if previous is None or new_value != old_value or gap_open:
-                    if previous is not None or gap_open:
-                        self._close_open_segment(conn, station_id, metric, collected_at)
-                    self._open_segment(
-                        conn, station_id, metric, collected_at, new_value
-                    )
-
+            self._transition_station_segments(
+                conn, station_id, previous, current, collected_at, closed_missing
+            )
             self._upsert_station_state(conn, current)
             next_state[station_id] = current
 
-        self._write_summary_points(conn, collected_at, list(next_state.values()))
+        for station_id, previous in previous_state.items():
+            if station_id in seen_ids:
+                continue
+            current = absent_station_state(previous)
+            self._transition_station_segments(
+                conn, station_id, previous, current, collected_at, closed_missing
+            )
+            self._upsert_station_state(conn, current)
+            next_state[station_id] = current
+
+        present_states = [next_state[station_id] for station_id in seen_ids]
+        self._write_summary_points(conn, collected_at, present_states)
         return next_state
 
     def rebuild_read_models(self) -> None:
@@ -801,9 +852,16 @@ class Storage:
                 return "duplicate"
 
             last_signatures = self._get_last_signatures(conn)
-            unchanged = bool(last_signatures) and all(
-                last_signatures.get(station["id"]) == observation_signature(station)
-                for station in stations
+            current_ids = {station["id"] for station in stations}
+            known_ids = set(last_signatures.keys()) if last_signatures else set()
+            station_set_unchanged = current_ids == known_ids
+            unchanged = (
+                bool(last_signatures)
+                and station_set_unchanged
+                and all(
+                    last_signatures.get(station["id"]) == observation_signature(station)
+                    for station in stations
+                )
             )
             if unchanged:
                 gap_open = conn.execute(
@@ -856,6 +914,8 @@ class Storage:
                         for s in stations
                     ],
                 )
+                self._apply_read_model(conn, collected_at, stations)
+            elif not station_set_unchanged:
                 self._apply_read_model(conn, collected_at, stations)
 
             conn.commit()
